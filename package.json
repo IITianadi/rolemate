@@ -12,7 +12,8 @@
     "demo:build": "node scripts/build-demo.mjs",
     "e2e:demo": "node --no-warnings test/e2e/demo.mjs",
     "site:build": "node site/build.mjs",
-    "site:deploy": "node site/build.mjs && cp site/onepage/index.html site/dist/index.html && wrangler deploy",
+    "site:cf": "node site/build.mjs && cp site/onepage/index.html site/dist/index.html",
+    "site:deploy": "npm run site:cf && wrangler deploy",
     "e2e:site": "node --no-warnings test/e2e/site.mjs"
   },
   "dependencies": {
