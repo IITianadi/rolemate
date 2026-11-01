@@ -1,0 +1,12 @@
+{
+  "name": "rolemate-site",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./site/dist",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "rolemate.in", "custom_domain": true },
+    { "pattern": "www.rolemate.in", "custom_domain": true }
+  ]
+}
