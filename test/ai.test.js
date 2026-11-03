@@ -210,3 +210,14 @@ test('API: prep stream with AI, cached GET, stale after the resume changes; chat
     assert.equal((await call(`/api/jobs/${id}/chat`, { method: 'POST', body: { messages: [{ role: 'user', content: 'hi' }] } })).status, 409);
   } finally { server.close(); }
 });
+
+test('cost guard: premium models are ignored unless explicitly allowed', async () => {
+  const { pickModel } = await import('../server/lib/ai.js');
+  const saved = process.env.ALLOW_PREMIUM_MODELS; delete process.env.ALLOW_PREMIUM_MODELS;
+  assert.equal(pickModel(''), 'claude-haiku-5-5');
+  assert.equal(pickModel('claude-opus-5-5'), 'claude-haiku-5-5');
+  assert.equal(pickModel('claude-sonnet-5-5'), 'claude-sonnet-5-5');
+  process.env.ALLOW_PREMIUM_MODELS = '1';
+  assert.equal(pickModel('claude-opus-5-5'), 'claude-opus-5-5');
+  if (saved === undefined) delete process.env.ALLOW_PREMIUM_MODELS; else process.env.ALLOW_PREMIUM_MODELS = saved;
+});

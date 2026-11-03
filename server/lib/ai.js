@@ -9,7 +9,17 @@ let lastError = null;
 
 export const setClientForTests = (c) => { testClient = c; lastError = null; };
 export const aiEnabled = () => !!testClient || !!process.env.ANTHROPIC_API_KEY;
-export const aiModel = () => process.env.TAILORKIT_MODEL || 'claude-haiku-5-5';
+// Cost guard: only Haiku and Sonnet are accepted. An Opus/Fable/Mythos name in TAILORKIT_MODEL is ignored (Haiku is used)
+// unless ALLOW_PREMIUM_MODELS=1, so a leftover setting cannot silently make every call about 40x more expensive.
+const DEFAULT_MODEL = 'claude-haiku-5-5';
+const PREMIUM = /opus|fable|mythos/i;
+export function pickModel(name) {
+  const m = String(name || '').trim();
+  if (!m) return DEFAULT_MODEL;
+  if (PREMIUM.test(m) && process.env.ALLOW_PREMIUM_MODELS !== '1') { console.warn(`[ai] ${m} is a premium model; using ${DEFAULT_MODEL}. Set ALLOW_PREMIUM_MODELS=1 to allow it.`); return DEFAULT_MODEL; }
+  return m;
+}
+export const aiModel = () => pickModel(process.env.TAILORKIT_MODEL);
 export const aiLastError = () => lastError;
 const api = () => testClient || (client ??= new Anthropic());
 
@@ -61,7 +71,7 @@ export async function researchWeb({ system, user, maxUses = 8, maxTokens = 8000 
   if (!aiEnabled()) return null;
   // Live web research is the one expensive step (searches are billed per use and results are read as input).
   // It stays off until you choose a model for it, e.g. TAILORKIT_RESEARCH_MODEL=claude-sonnet-5-5.
-  const researchModel = process.env.TAILORKIT_RESEARCH_MODEL;
+  const researchModel = process.env.TAILORKIT_RESEARCH_MODEL ? pickModel(process.env.TAILORKIT_RESEARCH_MODEL) : '';
   if (!researchModel && !testClient) return null;
   const messages = [{ role: 'user', content: user }];
   const sources = new Map();
