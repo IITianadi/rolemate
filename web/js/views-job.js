@@ -3,7 +3,7 @@ import { api, download, streamPost } from './api.js';
 import { icon } from './icons.js';
 import { renderMarkdown } from './markdown.js';
 import { STATUS_LABEL, bandOf } from './views-tracking.js';
-import { nextStep, path, ring, logoMark, sourceName } from './ui.js';
+import { nextStep, path, ring, logoMark, sourceName, paywall } from './ui.js';
 
 
 const aiBadge = () => h('span', { class: 'ai-badge' }, icon('sparkle'), 'AI');
@@ -24,7 +24,7 @@ export async function jobView(id, me, go) {
 
   async function tailor() {
     try { await api(`/api/jobs/${id}/tailor`, { method: 'POST' }); toast('Tailored resume ready'); await load(); draw(); }
-    catch (e) { toast(e.status === 402 ? 'You have used all free tailored resumes this month.' : e.message, true); }
+    catch (e) { toast(e.status === 402 ? 'You’ve used all your free resumes. Pay now to keep going.' : e.message, true); }
   }
 
   // ---------- Overview
@@ -303,6 +303,7 @@ export async function jobView(id, me, go) {
         h('button', { class: tab === k ? 'on' : '', role: 'tab', onclick: () => { tab = k; draw(); } }, l))));
     if (tab === 'info') host.append(jobInfo());
     else if (tab === 'overview') host.append(h('div', { class: 'layout2' }, overview(), h('div', { class: 'card' }, h('h3', null, 'Notes'), notes, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: async () => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { notes: notes.value } }); toast('Saved'); } catch (e) { toast(e.message, true); } } }, 'Save')))));
+    else if (!job.credit && (tab === 'prep' || tab === 'chat')) host.append(paywall(me.quota, 'Pay now to unlock interview prep and Ask AI for this job.'));
     else if (tab === 'prep') host.append(prepView());
     else if (tab === 'chat') host.append(chatView());
     else host.append(jobInfo());

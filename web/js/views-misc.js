@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import { api, download, setToken } from './api.js';
 import { resumeEditor } from './editor.js';
 import { EXT_STEPS } from './views-profile.js';
-import { pageHead, emptyState, nextStep } from './ui.js';
+import { pageHead, emptyState, nextStep, paywall } from './ui.js';
 
 export async function resumesView() {
   const { resumes } = await api('/api/resumes');
@@ -77,8 +77,8 @@ export async function settingsView(me, go) {
   const billing = () => {
     const q = me.quota; const pct = q.limit ? Math.min(100, Math.round((q.used / q.limit) * 100)) : 0;
     return h('div', { class: 'stack' }, h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('div', null, h('h2', null, 'Plan'), h('p', null, 'You are on the Free plan.')), h('span', { class: 'chip primary' }, 'Free')),
-      q.limit != null && h('div', null, h('div', { class: 'row between small', style: 'margin-bottom:6px' }, h('span', null, 'Tailored resumes this month'), h('span', { class: 'muted' }, `${q.used} of ${q.limit}`)), h('div', { class: 'meter' }, h('i', { style: `width:${pct}%` }))),
-      h('p', { class: 'muted small', style: 'margin:14px 0 0' }, 'Paid plans are coming soon.')));
+      q.limit != null && h('div', null, h('div', { class: 'row between small', style: 'margin-bottom:6px' }, h('span', null, 'Free resumes used'), h('span', { class: 'muted' }, `${q.used} of ${q.limit}`)), h('div', { class: 'meter' }, h('i', { style: `width:${pct}%` }))),
+      (q.limit != null && q.remaining <= 0) ? paywall(q) : h('p', { class: 'muted small', style: 'margin:14px 0 0' }, 'Each job uses one free resume. It covers saving the job, tailoring, interview prep and Ask AI for that job.')));
   };
 
   const tabs = [['account', 'Account', account], ['ai', 'AI', ai], ['extension', 'Extension', extension], ['billing', 'Plan', billing]];

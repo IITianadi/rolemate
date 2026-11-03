@@ -18,7 +18,7 @@ function addJobPanel(go) {
     err.hidden = true; btn.disabled = true;
     try {
       const r = await api('/api/capture', { method: 'POST', body: { text: text.value, url: url.value.trim(), source: 'pasted' } });
-      toast(r.quotaExceeded ? 'Saved. You have used this month’s free resumes.' : 'Job added');
+      toast(r.quotaExceeded ? 'Saved, but you’re out of free resumes. Pay now to keep going.' : 'Job added');
       go(`#/job/${r.job.id}`);
     } catch (e) { err.textContent = e.message; err.hidden = false; btn.disabled = false; }
   } }, 'Add job');

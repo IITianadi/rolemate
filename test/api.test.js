@@ -286,3 +286,20 @@ test('brand logo lookup accepts only a close name match and does nothing without
   assert.equal(await findCompanyLogo('Disney', { clientId: 'ID1', fetchFn: fakeFetch([{ name: 'Acme', domain: 'acme.com' }]) }), '');
   assert.equal(await findCompanyLogo('Razorpay', { clientId: '', fetchFn: fakeFetch([]) }), '');
 });
+
+test('free credits: one per job over the account lifetime; prep and chat need a credit', async () => {
+  token = (await api('/api/auth/signup', { method: 'POST', body: { email: 'credits@example.com', password: 'password123' } })).data.token;
+  await api('/api/profile/resume', { method: 'POST', body: uploadForm(resumeTxt, 'resume.txt') });
+  const jobs = [];
+  for (let i = 1; i <= 5; i++) jobs.push((await api('/api/capture', { method: 'POST', body: { text: jdTxt, url: `https://jobs.example/credit/${i}`, source: 'jobs.example', hints: { company: `Credit Co ${i}` } } })).data);
+  assert.equal(jobs.slice(0, 4).every((r) => r.job.credit), true, 'the first four jobs hold a credit');
+  assert.equal(jobs[4].quotaExceeded, true);
+  assert.equal(jobs[4].job.credit, false);
+  const prep = await api(`/api/jobs/${jobs[4].job.id}/prep`, { method: 'POST', body: {} });
+  assert.equal(prep.status, 402);
+  assert.match(prep.data.error, /Pay now/);
+  const chat = await api(`/api/jobs/${jobs[4].job.id}/chat`, { method: 'POST', body: { messages: [{ role: 'user', content: 'hi' }] } });
+  assert.equal(chat.status, 402);
+  const me = await api('/api/me');
+  assert.deepEqual([me.data.quota.used, me.data.quota.limit, me.data.quota.remaining], [4, 4, 0]);
+});

@@ -48,3 +48,11 @@ export function sourceName(job) {
   const key = Object.keys(SITES).find((k) => host === k || host.endsWith(`.${k}`));
   return key ? SITES[key] : host;
 }
+
+// Shown when the free resumes are used up. "Pay now" goes to the payment link (PAY_URL on the server) or to Settings.
+export function paywall(quota, extra) {
+  const link = quota?.payUrl;
+  return h('div', { class: 'card paywall' }, h('h2', null, 'You’re out of free resumes'),
+    h('p', { class: 'muted' }, `You’ve used all ${quota?.limit ?? 50} free resumes. ${extra || 'Pay now to keep going.'}`),
+    h('div', { class: 'row' }, link ? h('a', { class: 'btn primary', href: link, target: '_blank', rel: 'noopener noreferrer' }, 'Pay now') : h('span', { class: 'muted small' }, 'Payments are opening soon. We’ll let you know.')));
+}

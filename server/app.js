@@ -53,7 +53,7 @@ function sseStart(res) {
   return (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
 }
 
-export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_MONTHLY_LIMIT || 10) } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_LIMIT || 50) } = {}) {
   const db = openDb(dbPath);
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -94,10 +94,13 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     return p;
   };
   const quota = (user) => {
-    const used = db.prepare('SELECT COUNT(*) c FROM usage WHERE user_id = ? AND month = ?').get(user.id, month()).c;
+    // Free plan: one credit per job, counted over the account's lifetime (a credit covers capture, tailoring, prep and chat for that job).
+    const used = db.prepare('SELECT COUNT(*) c FROM usage WHERE user_id = ?').get(user.id).c;
     const limit = user.plan === 'free' ? freeLimit : null;
-    return { plan: user.plan, used, limit, remaining: limit == null ? null : Math.max(0, limit - used) };
+    return { plan: user.plan, used, limit, remaining: limit == null ? null : Math.max(0, limit - used), payUrl: process.env.PAY_URL || '' };
   };
+  const OUT_OF_CREDITS = (limit) => `You\u2019ve used your ${limit} free resumes. Pay now to keep going.`;
+  const hasCredit = (user, jobId) => user.plan !== 'free' || !!db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND job_key = ?').get(user.id, `job:${jobId}`);
   const jobRow = (userId, id) => {
     const r = db.prepare('SELECT * FROM jobs WHERE id = ? AND user_id = ?').get(Number(id), userId);
     if (!r) throw httpError(404, 'Job not found.');
@@ -106,6 +109,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   const jobOut = (r) => {
     const resumes = db.prepare('SELECT id, label, created_at, updated_at FROM resumes WHERE job_id = ? ORDER BY id DESC').all(r.id);
     return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, logo: r.logo || '', status: r.status, notes: r.notes,
+      credit: (db.prepare('SELECT plan FROM users WHERE id = ?').get(r.user_id)?.plan !== 'free') || !!db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND job_key = ?').get(r.user_id, `job:${r.id}`),
       requirements: j(r.requirements, {}), match: j(r.match, {}), resumes, createdAt: r.created_at, updatedAt: r.updated_at, appliedAt: r.applied_at };
   };
   const rescore = (profile, req) => scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, req);
@@ -113,7 +117,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   async function tailorJob(user, profile, jobR, { force } = {}) {
     const req = j(jobR.requirements, {});
     const key = `job:${jobR.id}`;
-    const already = db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND month = ? AND job_key = ?').get(user.id, month(), key);
+    const already = db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND job_key = ?').get(user.id, key);
     if (!already) {
       const q = quota(user);
       if (q.limit != null && q.remaining <= 0) return { quotaExceeded: true, quota: q };
@@ -324,7 +328,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const profile = needProfile(req.user.id);
     const r = jobRow(req.user.id, req.params.id);
     const t = await tailorJob(req.user, profile, r);
-    res.status(t.quotaExceeded ? 402 : 201).json(t.quotaExceeded ? { error: 'You have used all free tailored resumes this month.', ...t } : t);
+    res.status(t.quotaExceeded ? 402 : 201).json(t.quotaExceeded ? { error: 'You\u2019ve used all your free resumes. Pay now to keep going.', ...t } : t);
   });
 
   // ---------- interview prep (company research + brief + questions), cached per job
@@ -352,6 +356,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   app.post('/api/jobs/:id/prep', auth, async (req, res) => {
     const profile = needProfile(req.user.id);
     const r = jobRow(req.user.id, req.params.id);
+    if (!hasCredit(req.user, r.id)) throw httpError(402, OUT_OF_CREDITS(freeLimit));
     const send = sseStart(res);
     try {
       const ctx = prepContextFor(req.user, profile, r);
@@ -372,7 +377,11 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   app.post('/api/jobs/:id/chat', auth, async (req, res) => {
     const profile = needProfile(req.user.id);
     const r = jobRow(req.user.id, req.params.id);
+    if (!hasCredit(req.user, r.id)) throw httpError(402, OUT_OF_CREDITS(freeLimit));
     if (!aiEnabled()) throw httpError(409, 'Ask AI needs an Anthropic API key. See Settings.');
+    // Safety cap so one job cannot run up the AI bill: at most 60 questions per job.
+    const asked = db.prepare('INSERT INTO job_chat (job_id, n) VALUES (?, 1) ON CONFLICT(job_id) DO UPDATE SET n = n + 1 RETURNING n').get(r.id).n;
+    if (asked > 60) throw httpError(429, 'You have reached the question limit for this job.');
     // Keep a valid alternating history that starts and ends with the user.
     const cleaned = [];
     for (const m of (Array.isArray(req.body?.messages) ? req.body.messages : []).slice(-14)) {

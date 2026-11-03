@@ -182,3 +182,5 @@ textarea.prose { flex: 1; width: 100%; border: 0; background: transparent; box-s
 .stages button:hover { color: var(--ink); } .stages button.past { background: var(--good-bg); color: var(--good); } .stages button.now { background: var(--primary); color: #fff; } .stages button.rej:hover { color: var(--warn); }
 .jdinfo section { margin-top: 22px; } .jdinfo section:first-of-type { margin-top: 12px; } .jdinfo h3 { margin: 0 0 8px; } .jdinfo p { margin: 0 0 10px; line-height: 1.65; } .jdinfo ul.tidy { margin: 0 0 6px; }
 dl.facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 12px 0 0; font-size: 14px; } dl.facts dt { color: var(--muted); } dl.facts dd { margin: 0; font-weight: 550; word-break: break-word; }
+
+.paywall { max-width: 640px; border: 1px solid var(--primary-soft); }
