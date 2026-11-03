@@ -3,7 +3,7 @@ import { api, download, streamPost } from './api.js';
 import { icon } from './icons.js';
 import { renderMarkdown } from './markdown.js';
 import { STATUS_LABEL, bandOf } from './views-tracking.js';
-import { nextStep, path, ring } from './ui.js';
+import { nextStep, path, ring, logoMark, sourceName } from './ui.js';
 
 
 const aiBadge = () => h('span', { class: 'ai-badge' }, icon('sparkle'), 'AI');
@@ -240,9 +240,9 @@ export async function jobView(id, me, go) {
     const notes = h('textarea', { rows: 3, placeholder: 'Notes' }); notes.value = job.notes || '';
     append(host,
       h('div', { class: 'row between', style: 'margin-bottom:26px;align-items:flex-end' },
-        h('div', null, h('div', { class: 'row tight', style: 'margin-bottom:8px' }, job.company ? h('span', { class: 'chip primary' }, job.company) : h('span', { class: 'chip warn' }, 'Company not detected'), job.location && h('span', { class: 'muted small' }, job.location)),
+        h('div', { class: 'row', style: 'gap:16px;flex-wrap:nowrap;align-items:center' }, logoMark(job, 56), h('div', null, h('div', { class: 'row tight', style: 'margin-bottom:8px' }, job.company ? h('span', { class: 'chip primary' }, job.company) : h('span', { class: 'chip warn' }, 'Company not detected'), job.location && h('span', { class: 'muted small' }, job.location)),
           h('h1', null, job.title || 'Untitled role'),
-          h('div', { class: 'row', style: 'gap:6px;margin-top:6px' }, job.url && h('a', { class: 'small', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'Original posting ↗'), h('button', { class: 'btn sm ghost', onclick: () => { editing = !editing; draw(); } }, editing ? 'Cancel' : 'Edit details'))),
+          h('div', { class: 'row', style: 'gap:6px;margin-top:6px' }, job.url && h('a', { class: 'small', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, job.url ? `Posted on ${sourceName(job)} ↗` : 'Original posting ↗'), h('button', { class: 'btn sm ghost', onclick: () => { editing = !editing; draw(); } }, editing ? 'Cancel' : 'Edit details')))),
         h('div', { class: 'row' }, status, h('button', { class: 'btn ghost danger sm', onclick: async () => { await api(`/api/jobs/${id}`, { method: 'DELETE' }); toast('Deleted'); go('#/tracking'); } }, 'Delete'))),
       editing && editForm(),
       path(['Review fit', 'Resume', 'Prepare', 'Apply'], stageIndex()),

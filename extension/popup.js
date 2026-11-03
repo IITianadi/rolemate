@@ -87,6 +87,16 @@ function extractPage() {
   const cc = [];
   const addCo = (name, source) => { const n = clean(String(name || '')).split('\n')[0].trim(); if (n && n.length <= 80) cc.push({ name: n, source }); };
   if (ld && ld.hiringOrganization && ld.hiringOrganization.name) { out.companyTrusted = true; out.company = String(ld.hiringOrganization.name); }
+  // Company logo + website. Order: structured data, the company link in the job panel, then (only on a company's own
+  // careers site) the site icon. A job board's own icon is never used: that would be the board's logo, not the company's.
+  const httpUrl = (u) => { try { const x = new URL(u, location.href); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } };
+  out.logo = ''; out.companyDomain = '';
+  if (ld && ld.hiringOrganization) {
+    const o = ld.hiringOrganization;
+    out.logo = httpUrl(typeof o.logo === 'string' ? o.logo : (o.logo && o.logo.url) || '');
+    const site = [].concat(o.sameAs || o.url || [])[0];
+    try { if (site) out.companyDomain = new URL(site).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
+  }
   // Walk up from the description to the panel that also holds its heading / company link. Both belong to THIS job.
   let paneTitle = '';
   if (descNode) {
@@ -101,6 +111,7 @@ function extractPage() {
         // Prefer a link with visible text; a logo-only link falls back to its alt text ("Acme logo" is cleaned by the server).
         for (const l of [...links].sort((a, b) => (b.innerText.trim() ? 1 : 0) - (a.innerText.trim() ? 1 : 0)).slice(0, 4)) addCo(l.innerText || l.getAttribute('aria-label') || (l.querySelector('img') && l.querySelector('img').alt), 'link');
         paneTitle = hdText;
+        if (!out.logo) { const im = links.map((l) => l.querySelector('img')).find((i) => i && httpUrl(i.currentSrc || i.src)); if (im) out.logo = httpUrl(im.currentSrc || im.src); }
         break;
       }
     }
@@ -117,6 +128,10 @@ function extractPage() {
     if (slug) addCo(slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), 'url');
   } catch { /* ignore */ }
   out.companyCandidates = cc.slice(0, 10);
+  if (!out.logo && !/(linkedin|naukri|indeed|glassdoor|foundit|monster|instahyre|wellfound|cutshort|shine|timesjobs|apna|internshala|google|greenhouse|lever|ashbyhq|workable|smartrecruiters|jobvite|recruitee|breezy|myworkdayjobs|localhost)\./.test(host + '.')) {
+    const ic = document.querySelector('link[rel~="apple-touch-icon"]') || document.querySelector('link[rel~="icon"]');
+    if (ic) out.logo = httpUrl(ic.getAttribute('href'));
+  }
 
   if (!out.text) {
     const body = q(['main', '[role="main"]', 'article']);
@@ -152,7 +167,7 @@ async function capture(btn) {
     const [{ result: page }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractPage });
     if (!page || page.text.length < 80) throw new Error('Not enough text found. Select the job description on the page and try again.');
     btn.textContent = 'Matching to your resume…';
-    const res = await callApi('/api/capture', { method: 'POST', body: { url: page.url, externalId: page.externalId, source: page.source, text: page.text, hints: { title: page.title, titleTrusted: page.titleTrusted && !page.selection, titleCandidates: page.titleCandidates, company: page.company, companyTrusted: !!page.companyTrusted, companyCandidates: page.companyCandidates, location: page.location } } });
+    const res = await callApi('/api/capture', { method: 'POST', body: { url: page.url, externalId: page.externalId, source: page.source, text: page.text, hints: { title: page.title, titleTrusted: page.titleTrusted && !page.selection, titleCandidates: page.titleCandidates, company: page.company, companyTrusted: !!page.companyTrusted, companyCandidates: page.companyCandidates, location: page.location, logo: page.logo, companyDomain: page.companyDomain } } });
     await showResult(res);
   } catch (e) {
     if (e.status === 401) return loginScreen('Please sign in again.');

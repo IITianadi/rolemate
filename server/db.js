@@ -57,6 +57,7 @@ export function openDb(path = 'data/tailorkit.db') {
   if (!db.prepare('PRAGMA table_info(jobs)').all().some((c) => c.name === 'job_key')) {
     db.exec("ALTER TABLE jobs ADD COLUMN job_key TEXT NOT NULL DEFAULT ''");
   }
+  if (!db.prepare('PRAGMA table_info(jobs)').all().some((c) => c.name === 'logo')) db.exec("ALTER TABLE jobs ADD COLUMN logo TEXT NOT NULL DEFAULT ''");
   db.exec('CREATE INDEX IF NOT EXISTS jobs_key ON jobs(user_id, job_key)');
   return db;
 }

@@ -1,7 +1,7 @@
 import { h, toast, clear } from './dom.js';
 import { api } from './api.js';
 import { icon } from './icons.js';
-import { pageHead, emptyState, nextStep } from './ui.js';
+import { pageHead, emptyState, nextStep, logoMark, sourceName } from './ui.js';
 
 export const STATUS_LABEL = { saved: 'Saved', applied: 'Applied', screening: 'Screening call', interview: 'Interview', offer: 'Offer', rejected: 'Rejected' };
 export const bandOf = (m) => m?.band || 'unknown';
@@ -77,8 +77,8 @@ export async function trackingView(me, go) {
         h('h3', null, h('span', null, STATUS_LABEL[st]), h('b', null, list.filter((j) => j.status === st).length)));
       for (const j of list.filter((x) => x.status === st)) {
         col.append(h('a', { class: 'jcard', href: `#/job/${j.id}`, draggable: true, ondragstart: (e) => e.dataTransfer.setData('text/plain', String(j.id)) },
-          h('div', { class: 'row between', style: 'gap:8px;flex-wrap:nowrap;align-items:flex-start' }, h('div', { class: 't' }, j.title || 'Untitled role'), scorePill(j.match)),
-          h('div', { class: 'c' }, j.company || 'Company not detected')));
+          h('div', { class: 'row between', style: 'gap:8px;flex-wrap:nowrap;align-items:flex-start' }, h('div', { class: 'row', style: 'gap:10px;flex-wrap:nowrap;align-items:flex-start' }, logoMark(j, 32), h('div', { class: 't' }, j.title || 'Untitled role')), scorePill(j.match)),
+          h('div', { class: 'c' }, j.company || 'Company not detected', sourceName(j) ? h('span', { class: 'faint' }, ` · ${sourceName(j)}`) : null)));
       }
       el.append(col);
     }
@@ -90,7 +90,7 @@ export async function trackingView(me, go) {
     return h('div', { class: 'card flush', style: 'overflow-x:auto' }, h('table', { class: 't' },
       h('thead', null, h('tr', null, ['Role', 'Fit', 'Stage'].map((x) => h('th', null, x)))),
       h('tbody', null, list.map((j) => h('tr', { onclick: (e) => { if (!e.target.closest('select')) location.hash = `#/job/${j.id}`; } },
-        h('td', null, h('div', { style: 'font-weight:600' }, j.title || 'Untitled role'), h('div', { class: 'muted small' }, j.company || 'Company not detected')),
+        h('td', null, h('div', { class: 'row', style: 'gap:12px;flex-wrap:nowrap' }, logoMark(j, 36), h('div', null, h('div', { style: 'font-weight:600' }, j.title || 'Untitled role'), h('div', { class: 'muted small' }, j.company || 'Company not detected', sourceName(j) ? ` · ${sourceName(j)}` : '')))),
         h('td', null, scorePill(j.match)),
         h('td', null, h('select', { 'aria-label': 'Stage', onchange: (e) => move(j.id, e.target.value) }, statuses.map((s) => h('option', { value: s, selected: s === j.status }, STATUS_LABEL[s])))))))));
   }

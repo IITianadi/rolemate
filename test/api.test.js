@@ -252,3 +252,15 @@ test('account deletion needs confirmation and removes data', async () => {
   assert.equal((await api('/api/account', { method: 'DELETE', body: { confirm: 'rahul@example.com' } })).status, 200);
   assert.equal((await api('/api/me')).status, 401);
 });
+
+test('capture stores the company logo and posting URL; unsafe logos are ignored', async () => {
+  token = (await api('/api/auth/signup', { method: 'POST', body: { email: 'logo@example.com', password: 'password123' } })).data.token; // earlier tests removed the shared user
+  await api('/api/profile/resume', { method: 'POST', body: uploadForm(resumeTxt, 'resume.txt') });
+  const cap = (url, hints) => api('/api/capture', { method: 'POST', body: { text: jdTxt, url, source: 'linkedin.com', hints: { company: 'Acme Payments', ...hints } } });
+  let r = await cap('https://www.linkedin.com/jobs/view/1234567890', { logo: 'https://media.licdn.com/acme.png' });
+  assert.deepEqual([r.data.job.logo, r.data.job.url], ['https://media.licdn.com/acme.png', 'https://www.linkedin.com/jobs/view/1234567890']);
+  r = await cap('https://jobs.example/acme/2', { logo: 'javascript:alert(1)', companyDomain: 'acme.com' });
+  assert.match(r.data.job.logo, /^https:\/\/www\.google\.com\/s2\/favicons\?domain=acme\.com/, 'bad logo falls back to the company site icon');
+  r = await cap('https://jobs.example/acme/3', { logo: 'http://insecure.example/a.png' });
+  assert.equal(r.data.job.logo, '', 'http logos are not stored');
+});

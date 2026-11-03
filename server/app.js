@@ -104,7 +104,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   };
   const jobOut = (r) => {
     const resumes = db.prepare('SELECT id, label, created_at, updated_at FROM resumes WHERE job_id = ? ORDER BY id DESC').all(r.id);
-    return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, status: r.status, notes: r.notes,
+    return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, logo: r.logo || '', status: r.status, notes: r.notes,
       requirements: j(r.requirements, {}), match: j(r.match, {}), resumes, createdAt: r.created_at, updatedAt: r.updated_at, appliedAt: r.applied_at };
   };
   const rescore = (profile, req) => scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, req);
@@ -227,6 +227,14 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     if (!reqs.company) reqs.company = weakCompany(); // last resort: site name / page title / URL slug
     const match = rescore(profile, reqs);
     const externalId = String(req.body?.externalId || '').slice(0, 80);
+    // Logo: only an https image address the page itself showed; otherwise the company website's icon. Stored as a plain
+    // string and shown by the browser (the server never fetches it).
+    const logo = (() => {
+      const u = String(hin.logo || '').slice(0, 600);
+      try { if (u && new URL(u).protocol === 'https:') return u; } catch { /* not a URL */ }
+      const d = String(hin.companyDomain || '').toLowerCase().slice(0, 120);
+      return /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(d) ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=128` : '';
+    })();
     let host = ''; try { host = new URL(url).host.toLowerCase(); } catch { /* not a URL */ }
     const baseKey = externalId ? `${host}:${externalId}` : canonicalUrl(url);
     let jobKey = baseKey;
@@ -242,11 +250,11 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     let jobId;
     if (existing) {
       jobId = existing.id;
-      db.prepare("UPDATE jobs SET title=?, company=?, location=?, jd_text=?, requirements=?, match=?, job_key=?, updated_at=datetime('now') WHERE id=?")
-        .run(reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), text, JSON.stringify(reqs), JSON.stringify(match), existing.job_key || baseKey, jobId);
+      db.prepare("UPDATE jobs SET title=?, company=?, location=?, jd_text=?, requirements=?, match=?, job_key=?, logo=CASE WHEN ? != '' THEN ? ELSE logo END, updated_at=datetime('now') WHERE id=?")
+        .run(reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), text, JSON.stringify(reqs), JSON.stringify(match), existing.job_key || baseKey, logo, logo, jobId);
     } else {
-      const info = db.prepare('INSERT INTO jobs (user_id, title, company, location, url, source, jd_text, requirements, match, job_key) VALUES (?,?,?,?,?,?,?,?,?,?)')
-        .run(req.user.id, reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), url, source, text, JSON.stringify(reqs), JSON.stringify(match), jobKey);
+      const info = db.prepare('INSERT INTO jobs (user_id, title, company, location, url, source, jd_text, requirements, match, job_key, logo) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+        .run(req.user.id, reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), url, source, text, JSON.stringify(reqs), JSON.stringify(match), jobKey, logo);
       jobId = Number(info.lastInsertRowid);
     }
     const jobR = jobRow(req.user.id, jobId);
@@ -450,7 +458,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
 
   // ---------- dashboard (static)
   app.use((req, res, next) => {
-    if (!req.path.startsWith('/api')) res.set('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    if (!req.path.startsWith('/api')) res.set('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     next();
   });
   app.use(express.static(WEB_DIR, { extensions: ['html'] }));

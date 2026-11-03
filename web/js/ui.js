@@ -27,3 +27,24 @@ export function stepper(current) {
 }
 
 export const emptyState = (ic, title, text, ...actions) => h('div', { class: 'card empty' }, h('div', { class: 'iconbox' }, ic), h('h2', null, title), text && h('p', { class: 'muted', style: 'max-width:440px;margin:6px auto 22px' }, text), actions.length > 0 && h('div', { class: 'row', style: 'justify-content:center' }, actions));
+
+// Company logo from the job posting, with the company's first letter when there is no logo or it fails to load.
+export function logoMark(job, size = 36) {
+  const letter = ((job.company || job.title || '?').trim()[0] || '?').toUpperCase();
+  const box = h('span', { class: 'logomark', style: `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.44)}px`, 'aria-hidden': 'true' }, letter);
+  if (job.logo) {
+    const img = h('img', { src: job.logo, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+    img.addEventListener('error', () => img.remove());
+    box.append(img);
+  }
+  return box;
+}
+
+// "linkedin.com" -> "LinkedIn": where the job was posted.
+const SITES = { 'linkedin.com': 'LinkedIn', 'naukri.com': 'Naukri', 'indeed.com': 'Indeed', 'glassdoor.com': 'Glassdoor', 'foundit.in': 'foundit', 'instahyre.com': 'Instahyre', 'wellfound.com': 'Wellfound', 'cutshort.io': 'Cutshort', 'internshala.com': 'Internshala', 'greenhouse.io': 'Greenhouse', 'lever.co': 'Lever', 'ashbyhq.com': 'Ashby', 'myworkdayjobs.com': 'Workday' };
+export function sourceName(job) {
+  let host = job.source || ''; try { host = new URL(job.url).hostname; } catch { /* use source as is */ }
+  host = host.replace(/^www\./, '').toLowerCase();
+  const key = Object.keys(SITES).find((k) => host === k || host.endsWith(`.${k}`));
+  return key ? SITES[key] : host;
+}
