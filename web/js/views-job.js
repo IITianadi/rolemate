@@ -10,7 +10,7 @@ const aiBadge = () => h('span', { class: 'ai-badge' }, icon('sparkle'), 'AI');
 
 export async function jobView(id, me, go) {
   const host = h('div');
-  let job; let tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab') || 'overview';
+  let job; let tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab') || 'info';
   const state = { prep: null, research: null, stale: false, createdAt: '', running: false, steps: [], error: '', loaded: false };
   const chat = { messages: [], busy: false };
   let editing = false;
@@ -219,7 +219,56 @@ export async function jobView(id, me, go) {
       } }, 'Save'), h('span', { class: 'muted small' }, 'Interview prep will refresh for the new company and role.')));
   }
 
-  function jdTab() { return h('div', { class: 'card' }, h('h2', null, 'Captured job text'), h('p', { class: 'muted small' }, 'Exactly what the extension read from the page.'), h('pre', { class: 'jd' }, job.jdText || '')); }
+  // ---------- Job info: the saved posting in a structured layout (sections on the left, keywords on the right)
+  const HEAD = /^(about( the)?( job| role| us| the company| company| team)?|job (description|summary|overview|responsibilities|requirements)|(key )?responsibilities|what you('| wi)ll (do|bring|need)|who you are|(minimum |preferred |basic |required )?(qualifications|requirements|skills)|requirements|(nice|good) to have|benefits|perks|compensation|salary|about you|overview|summary|the role|your role|how to apply|why join us|what we offer|role and responsibilities|skills required|education)\s*:?$/i;
+  function parseJd(text) {
+    const secs = []; let cur = { title: 'About the job', lines: [] };
+    for (const raw of String(text || '').split('\n')) {
+      const line = raw.trim();
+      if (!line) { cur.lines.push(''); continue; }
+      const isHead = line.length <= 60 && !/[.!?]$/.test(line) && (HEAD.test(line) || /:$/.test(line) && line.split(' ').length <= 6);
+      if (isHead) { if (cur.lines.some((l) => l)) secs.push(cur); cur = { title: line.replace(/:$/, ''), lines: [] }; } else cur.lines.push(line);
+    }
+    if (cur.lines.some((l) => l)) secs.push(cur);
+    return secs;
+  }
+  const BULLET = /^([-•*·▪●◦]|\d+[.)])\s+/;
+  function secBody(lines) {
+    const out = []; let ul = null;
+    for (const l of lines) {
+      if (BULLET.test(l)) { if (!ul) { ul = h('ul', { class: 'tidy' }); out.push(ul); } ul.append(h('li', null, l.replace(BULLET, ''))); }
+      else if (l) { ul = null; out.push(h('p', null, l)); } else ul = null;
+    }
+    return out;
+  }
+  function jobInfo() {
+    const m = job.match || {}; const rq = job.requirements || {};
+    const has = new Set([...(m.matchedMust || []), ...(m.matchedNice || [])].map((x) => String(x).toLowerCase()));
+    const kw = (list, label) => list?.length > 0 && h('div', null, h('div', { class: 'label', style: 'margin-bottom:8px' }, label),
+      h('div', { class: 'reqs' }, list.map((x) => h('span', { class: `chip ${has.has(String(x).toLowerCase()) ? 'good' : 'warn'}` }, x))));
+    const secs = parseJd(job.jdText);
+    const left = h('div', { class: 'card jdinfo' }, h('h2', null, 'Job description'),
+      secs.length ? secs.map((x) => h('section', null, h('h3', null, x.title), secBody(x.lines))) : h('p', { class: 'muted' }, 'No description was captured. Open the posting and capture it again.'),
+      h('details', { style: 'margin-top:18px' }, h('summary', { class: 'small muted' }, 'Show the raw captured text'), h('pre', { class: 'jd', style: 'margin-top:12px' }, job.jdText || '')));
+    const right = h('div', { class: 'stack' },
+      h('div', { class: 'card stack' }, h('h3', null, 'Keywords from this job'),
+        h('p', { class: 'muted small', style: 'margin:0' }, h('span', { class: 'chip good' }, 'In your resume'), ' ', h('span', { class: 'chip warn' }, 'Missing')),
+        kw(rq.mustHave, 'Required') || h('p', { class: 'muted small' }, 'No required skills detected.'), kw(rq.niceToHave, 'Nice to have'),
+        (m.missingMust || []).length > 0 && h('a', { class: 'btn sm', href: '#', onclick: (e) => { e.preventDefault(); tab = 'overview'; draw(); setTimeout(() => document.getElementById('gaps')?.scrollIntoView({ behavior: 'smooth' }), 50); } }, 'Review missing skills')),
+      h('div', { class: 'card' }, h('h3', null, 'Details'),
+        h('dl', { class: 'facts' },
+          h('dt', null, 'Company'), h('dd', null, job.company || '–'), h('dt', null, 'Location'), h('dd', null, job.location || '–'),
+          h('dt', null, 'Posted on'), h('dd', null, job.url ? h('a', { href: job.url, target: '_blank', rel: 'noopener noreferrer' }, `${sourceName(job)} ↗`) : '–'),
+          h('dt', null, 'Saved'), h('dd', null, savedAgo() || '–'),
+          (rq.minYears != null) && [h('dt', null, 'Experience'), h('dd', null, rq.maxYears ? `${rq.minYears}–${rq.maxYears} years` : `${rq.minYears}+ years`)])));
+    return h('div', { class: 'layout2 wideinfo' }, left, right);
+  }
+  function savedAgo() {
+    const t = job.createdAt && new Date(String(job.createdAt).includes('T') ? job.createdAt : String(job.createdAt).replace(' ', 'T') + 'Z');
+    if (!t || Number.isNaN(t.getTime())) return '';
+    const d = Math.floor((Date.now() - t.getTime()) / 86400000);
+    return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 30 ? `${d} days ago` : t.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
 
   // What should this person do next on this job?
   function next() {
@@ -235,24 +284,28 @@ export async function jobView(id, me, go) {
 
   function draw() {
     clear(host);
-    const status = h('select', { 'aria-label': 'Stage', onchange: async (e) => { try { const r = await api(`/api/jobs/${id}`, { method: 'PATCH', body: { status: e.target.value } }); job = { ...job, ...r.job }; toast(`Moved to ${STATUS_LABEL[e.target.value]}`); draw(); } catch (x) { toast(x.message, true); } } },
-      Object.entries(STATUS_LABEL).map(([v, l]) => h('option', { value: v, selected: v === job.status }, l)));
+    const move = async (v) => { try { const r = await api(`/api/jobs/${id}`, { method: 'PATCH', body: { status: v } }); job = { ...job, ...r.job }; toast(`Moved to ${STATUS_LABEL[v]}`); draw(); } catch (x) { toast(x.message, true); } };
+    const keys = Object.keys(STATUS_LABEL); const at = keys.indexOf(job.status);
+    const stages = h('div', { class: 'stages', role: 'group', 'aria-label': 'Stage' }, keys.map((v, i) =>
+      h('button', { class: `${i === at ? 'now' : i < at && v !== 'rejected' ? 'past' : ''} ${v === 'rejected' ? 'rej' : ''}`, 'aria-pressed': i === at ? 'true' : 'false', onclick: () => { if (i !== at) move(v); } }, STATUS_LABEL[v])));
     const notes = h('textarea', { rows: 3, placeholder: 'Notes' }); notes.value = job.notes || '';
     append(host,
       h('div', { class: 'row between', style: 'margin-bottom:26px;align-items:flex-end' },
-        h('div', { class: 'row', style: 'gap:16px;flex-wrap:nowrap;align-items:center' }, logoMark(job, 56), h('div', null, h('div', { class: 'row tight', style: 'margin-bottom:8px' }, job.company ? h('span', { class: 'chip primary' }, job.company) : h('span', { class: 'chip warn' }, 'Company not detected'), job.location && h('span', { class: 'muted small' }, job.location)),
+        h('div', { class: 'row', style: 'gap:16px;flex-wrap:nowrap;align-items:center' }, logoMark(job, 56), h('div', null, h('div', { class: 'row tight', style: 'margin-bottom:8px' }, job.company ? h('span', { class: 'chip primary' }, job.company) : h('span', { class: 'chip warn' }, 'Company not detected'), job.location && h('span', { class: 'muted small' }, job.location), savedAgo() && h('span', { class: 'muted small' }, `· Saved ${savedAgo()}`)),
           h('h1', null, job.title || 'Untitled role'),
           h('div', { class: 'row', style: 'gap:6px;margin-top:6px' }, job.url && h('a', { class: 'small', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, job.url ? `Posted on ${sourceName(job)} ↗` : 'Original posting ↗'), h('button', { class: 'btn sm ghost', onclick: () => { editing = !editing; draw(); } }, editing ? 'Cancel' : 'Edit details')))),
-        h('div', { class: 'row' }, status, h('button', { class: 'btn ghost danger sm', onclick: async () => { await api(`/api/jobs/${id}`, { method: 'DELETE' }); toast('Deleted'); go('#/tracking'); } }, 'Delete'))),
+        h('div', { class: 'row' }, h('button', { class: 'btn ghost danger sm', onclick: async () => { await api(`/api/jobs/${id}`, { method: 'DELETE' }); toast('Deleted'); go('#/tracking'); } }, 'Delete'))),
       editing && editForm(),
+      stages,
       path(['Review fit', 'Resume', 'Prepare', 'Apply'], stageIndex()),
       next(),
-      h('div', { class: 'tabs', role: 'tablist' }, [['overview', 'Overview', null], ['prep', 'Interview prep', null], ['chat', 'Ask AI', null], ['jd', 'Job text', null]].map(([k, l]) =>
+      h('div', { class: 'tabs', role: 'tablist' }, [['info', 'Job info', null], ['overview', 'Fit & resume', null], ['prep', 'Interview prep', null], ['chat', 'Ask AI', null]].map(([k, l]) =>
         h('button', { class: tab === k ? 'on' : '', role: 'tab', onclick: () => { tab = k; draw(); } }, l))));
-    if (tab === 'overview') host.append(h('div', { class: 'layout2' }, overview(), h('div', { class: 'card' }, h('h3', null, 'Notes'), notes, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: async () => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { notes: notes.value } }); toast('Saved'); } catch (e) { toast(e.message, true); } } }, 'Save')))));
+    if (tab === 'info') host.append(jobInfo());
+    else if (tab === 'overview') host.append(h('div', { class: 'layout2' }, overview(), h('div', { class: 'card' }, h('h3', null, 'Notes'), notes, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: async () => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { notes: notes.value } }); toast('Saved'); } catch (e) { toast(e.message, true); } } }, 'Save')))));
     else if (tab === 'prep') host.append(prepView());
     else if (tab === 'chat') host.append(chatView());
-    else host.append(jdTab());
+    else host.append(jobInfo());
   }
   draw();
   return host;
