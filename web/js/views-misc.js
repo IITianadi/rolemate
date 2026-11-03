@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import { api, download, setToken } from './api.js';
 import { resumeEditor } from './editor.js';
 import { EXT_STEPS } from './views-profile.js';
-import { pageHead, emptyState, nextStep, paywall } from './ui.js';
+import { pageHead, emptyState, nextStep, paywall, packButtons } from './ui.js';
 
 export async function resumesView() {
   const { resumes } = await api('/api/resumes');
@@ -47,7 +47,9 @@ export async function gapsView() {
 const codeBlock = (text) => h('div', { class: 'row', style: 'gap:8px;flex-wrap:nowrap;align-items:flex-start' }, h('pre', { class: 'code grow', style: 'margin:0' }, text), h('button', { class: 'btn sm icon', 'aria-label': 'Copy', onclick: () => copyText(text) }, icon('copy', 15)));
 
 export async function settingsView(me, go) {
-  let tab = 'account';
+  const paid = new URLSearchParams(location.search).get('paid') === '1';
+  let tab = paid ? 'billing' : 'account';
+  if (paid) history.replaceState(null, '', location.pathname + location.hash);
   const host = h('div');
   const body = h('div');
   const del = h('input', { type: 'text', placeholder: 'Type your email to confirm', style: 'max-width:280px' });
@@ -63,9 +65,11 @@ export async function settingsView(me, go) {
 
   const billing = () => {
     const q = me.quota; const pct = q.limit ? Math.min(100, Math.round((q.used / q.limit) * 100)) : 0;
-    return h('div', { class: 'stack' }, h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('div', null, h('h2', null, 'Plan'), h('p', null, 'You are on the Free plan.')), h('span', { class: 'chip primary' }, 'Free')),
-      q.limit != null && h('div', null, h('div', { class: 'row between small', style: 'margin-bottom:6px' }, h('span', null, 'Free resumes used'), h('span', { class: 'muted' }, `${q.used} of ${q.limit}`)), h('div', { class: 'meter' }, h('i', { style: `width:${pct}%` }))),
-      (q.limit != null && q.remaining <= 0) ? paywall(q) : h('p', { class: 'muted small', style: 'margin:14px 0 0' }, 'Each job uses one free resume. It covers saving the job, tailoring, interview prep and Ask AI for that job.')));
+    return h('div', { class: 'stack' },
+      paid && h('div', { class: 'info' }, 'Thank you. Your payment is being confirmed and your credits will show here in a moment.', ' ', h('a', { href: '#', onclick: async (e) => { e.preventDefault(); location.reload(); } }, 'Refresh')),
+      h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('div', null, h('h2', null, 'Credits'), h('p', null, 'One credit covers one job: saving it, tailoring, interview prep and Ask AI for that job.')), h('span', { class: 'chip primary' }, q.limit == null ? 'Unlimited' : `${q.remaining} left`)),
+        q.limit != null && h('div', null, h('div', { class: 'row between small', style: 'margin-bottom:6px' }, h('span', null, 'Credits used'), h('span', { class: 'muted' }, `${q.used} of ${q.limit}`)), h('div', { class: 'meter' }, h('i', { style: `width:${pct}%` })))),
+      q.limit != null && h('div', { class: 'card' }, h('h2', null, 'Get more credits'), h('p', { class: 'muted small' }, 'Pay once, no subscription. Credits never expire.'), packButtons(q)));
   };
 
   const tabs = [['account', 'Account', account], ['extension', 'Extension', extension], ['billing', 'Plan', billing]];

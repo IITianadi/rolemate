@@ -184,3 +184,6 @@ textarea.prose { flex: 1; width: 100%; border: 0; background: transparent; box-s
 dl.facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 12px 0 0; font-size: 14px; } dl.facts dt { color: var(--muted); } dl.facts dd { margin: 0; font-weight: 550; word-break: break-word; }
 
 .paywall { max-width: 640px; border: 1px solid var(--primary-soft); }
+.packs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 8px; }
+.pack { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 18px; border-radius: 20px; background: var(--sunken); } .pack.best { background: var(--primary-soft); }
+.pack .price { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; } .pack .btn { margin-top: 8px; }

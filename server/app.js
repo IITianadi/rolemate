@@ -14,6 +14,7 @@ import { aiEnabled, aiLastError, aiModel, streamChat } from './lib/ai.js';
 import { deriveProfile } from './lib/derive.js';
 import { getCompanyResearch } from './lib/research.js';
 import { buildPrep, chatSystem } from './lib/prep.js';
+import { PACKS, packById, publicPacks, billingConfig, billingEnabled, verifySignature, createPaymentLink } from './lib/billing.js';
 import { findCompanyLogo } from './lib/logo.js';
 import { createHash } from 'node:crypto';
 
@@ -53,12 +54,13 @@ function sseStart(res) {
   return (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
 }
 
-export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_LIMIT || 50) } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_LIMIT || 50), billing = {} } = {}) {
+  const bill = billingConfig(billing);
   const db = openDb(dbPath);
   const app = express();
   app.set('trust proxy', 'loopback');
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { if (req.originalUrl === '/api/billing/webhook') req.rawBody = buf; } }));
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
   const authLimit = rateLimiter({ max: 15 });
 
@@ -96,8 +98,9 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   const quota = (user) => {
     // Free plan: one credit per job, counted over the account's lifetime (a credit covers capture, tailoring, prep and chat for that job).
     const used = db.prepare('SELECT COUNT(*) c FROM usage WHERE user_id = ?').get(user.id).c;
-    const limit = user.plan === 'free' ? freeLimit : null;
-    return { plan: user.plan, used, limit, remaining: limit == null ? null : Math.max(0, limit - used), payUrl: process.env.PAY_URL || '' };
+    const bought = db.prepare('SELECT COALESCE(SUM(credits), 0) c FROM purchases WHERE user_id = ?').get(user.id).c;
+    const limit = user.plan === 'free' ? freeLimit + bought : null;
+    return { plan: user.plan, used, limit, bought, remaining: limit == null ? null : Math.max(0, limit - used), packs: billingEnabled(bill) ? publicPacks() : [] };
   };
   const OUT_OF_CREDITS = (limit) => `You\u2019ve used your ${limit} free resumes. Pay now to keep going.`;
   const hasCredit = (user, jobId) => user.plan !== 'free' || !!db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND job_key = ?').get(user.id, `job:${jobId}`);
@@ -136,6 +139,31 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const key = process.env.ADMIN_KEY || '';
     if (!key || req.get('x-admin-key') !== key) return res.status(404).json({ error: 'Not found' });
     res.json({ aiEnabled: aiEnabled(), model: aiEnabled() ? aiModel() : null, researchModel: process.env.TAILORKIT_RESEARCH_MODEL || null, lastError: aiLastError() });
+  });
+
+  // ---------- billing (Razorpay Payment Links). The webhook, not the browser, is what adds credits.
+  app.post('/api/billing/checkout', auth, async (req, res) => {
+    if (!billingEnabled(bill)) throw httpError(503, 'Payments are not open yet.');
+    const pack = packById(String(req.body?.packId || ''));
+    if (!pack) throw httpError(400, 'Choose a credit pack.');
+    try { res.json({ url: await createPaymentLink(bill, { userId: req.user.id, email: req.user.email, pack }) }); }
+    catch (e) { console.error('[billing]', e.message); throw httpError(502, 'Could not start the payment. Please try again.'); }
+  });
+
+  app.post('/api/billing/webhook', (req, res) => {
+    if (!verifySignature(req.rawBody, req.get('x-razorpay-signature'), bill.webhookSecret)) return res.status(400).json({ error: 'Bad signature.' });
+    const ev = req.body || {};
+    if (ev.event === 'payment_link.paid' || ev.event === 'payment.captured') {
+      const pay = ev.payload?.payment?.entity || {};
+      const notes = ev.payload?.payment_link?.entity?.notes || pay.notes || {};
+      const pack = packById(String(notes.pack_id || ''));
+      const userId = Number(notes.user_id);
+      // Credit only what was really paid: the amount must match the pack's price.
+      if (pack && userId && pay.id && pay.status !== 'failed' && Number(pay.amount) === pack.amount && db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId)) {
+        db.prepare('INSERT OR IGNORE INTO purchases (user_id, payment_id, pack_id, credits, amount) VALUES (?,?,?,?,?)').run(userId, String(pay.id), pack.id, pack.credits, pack.amount);
+      }
+    }
+    res.json({ ok: true });
   });
 
   // ---------- auth

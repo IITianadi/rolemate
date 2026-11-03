@@ -48,6 +48,11 @@ export function openDb(path = 'data/tailorkit.db') {
     );
     CREATE INDEX IF NOT EXISTS resumes_user ON resumes(user_id, created_at);
     -- One row per job per month: re-tailoring the same job is free, deleting a job does not refund the quota.
+    -- One row per successful payment. payment_id is unique so a repeated webhook can never credit twice.
+    CREATE TABLE IF NOT EXISTS purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      payment_id TEXT NOT NULL UNIQUE, pack_id TEXT NOT NULL, credits INTEGER NOT NULL, amount INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS job_chat (job_id INTEGER PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE, n INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS usage (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, month TEXT NOT NULL, job_key TEXT NOT NULL,

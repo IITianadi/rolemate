@@ -1,4 +1,5 @@
-import { h } from './dom.js';
+import { h, toast } from './dom.js';
+import { api } from './api.js';
 
 export const pageHead = (title, desc, ...actions) => h('div', { class: 'pagehead' }, h('div', null, h('h1', null, title), desc && h('p', null, desc)), actions.length > 0 && h('div', { class: 'row' }, actions));
 
@@ -49,10 +50,24 @@ export function sourceName(job) {
   return key ? SITES[key] : host;
 }
 
-// Shown when the free resumes are used up. "Pay now" goes to the payment link (PAY_URL on the server) or to Settings.
+// Credit packs with Buy buttons. A payment opens Razorpay's page; credits are added by the server once Razorpay confirms.
+export function packButtons(quota) {
+  const buy = async (id, btn) => {
+    btn.disabled = true;
+    try { const r = await api('/api/billing/checkout', { method: 'POST', body: { packId: id } }); location.href = r.url; }
+    catch (e) { toast(e.message, true); btn.disabled = false; }
+  };
+  const packs = quota?.packs || [];
+  if (!packs.length) return h('span', { class: 'muted small' }, 'Payments are opening soon. We’ll let you know.');
+  return h('div', { class: 'packs' }, packs.map((p) => h('div', { class: `pack${p.best ? ' best' : ''}` },
+    p.best && h('span', { class: 'chip primary' }, 'Best value'),
+    h('strong', null, `${p.credits} credits`), h('div', { class: 'price' }, `₹${p.price}`), h('div', { class: 'muted small' }, `₹${(p.price / p.credits).toFixed(1)} per job`),
+    h('button', { class: 'btn primary', onclick: (e) => buy(p.id, e.currentTarget) }, 'Buy'))));
+}
+
+// Shown when the credits are used up.
 export function paywall(quota, extra) {
-  const link = quota?.payUrl;
-  return h('div', { class: 'card paywall' }, h('h2', null, 'You’re out of free resumes'),
-    h('p', { class: 'muted' }, `You’ve used all ${quota?.limit ?? 50} free resumes. ${extra || 'Pay now to keep going.'}`),
-    h('div', { class: 'row' }, link ? h('a', { class: 'btn primary', href: link, target: '_blank', rel: 'noopener noreferrer' }, 'Pay now') : h('span', { class: 'muted small' }, 'Payments are opening soon. We’ll let you know.')));
+  return h('div', { class: 'card paywall' }, h('h2', null, 'You’re out of credits'),
+    h('p', { class: 'muted' }, `${extra || 'Pay now to keep going.'} One credit covers one job: saving it, tailoring, interview prep and Ask AI for that job.`),
+    packButtons(quota));
 }
