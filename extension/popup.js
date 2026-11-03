@@ -98,10 +98,10 @@ function extractPage() {
     try { if (site) out.companyDomain = new URL(site).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
   }
   // Walk up from the description to the panel that also holds its heading / company link. Both belong to THIS job.
-  let paneTitle = '';
+  let paneTitle = ''; let panel = null;
   if (descNode) {
     let a = descNode;
-    for (let i = 0; i < 8 && a && a !== document.body; i++) {
+    for (let i = 0; i < 12 && a && a !== document.body; i++) {
       a = a.parentElement;
       if (!a) break;
       const links = [...a.querySelectorAll('a[href*="/company/"], a[href*="/companies/"]')];
@@ -110,11 +110,29 @@ function extractPage() {
       if (links.length || hdText.length >= 3) {
         // Prefer a link with visible text; a logo-only link falls back to its alt text ("Acme logo" is cleaned by the server).
         for (const l of [...links].sort((a, b) => (b.innerText.trim() ? 1 : 0) - (a.innerText.trim() ? 1 : 0)).slice(0, 4)) addCo(l.innerText || l.getAttribute('aria-label') || (l.querySelector('img') && l.querySelector('img').alt), 'link');
-        paneTitle = hdText;
-        if (!out.logo) { const im = links.map((l) => l.querySelector('img')).find((i) => i && httpUrl(i.currentSrc || i.src)); if (im) out.logo = httpUrl(im.currentSrc || im.src); }
+        paneTitle = hdText; panel = a;
         break;
       }
     }
+  }
+  // Logo hunt inside the job panel: real src or the lazy-load attributes, scored by "logo" hints and a sensible size.
+  if (!out.logo && panel) {
+    const srcOf = (i) => httpUrl(i.currentSrc || i.getAttribute('src') || '') || httpUrl(i.getAttribute('data-delayed-url') || i.getAttribute('data-src') || i.getAttribute('data-lazy-src') || '');
+    let best = null; let bestScore = 0;
+    let root = panel; for (let k = 0; k < 4 && root.parentElement && root.parentElement !== document.body && !root.querySelector('img[class*="logo" i], img[alt*="logo" i], a[href*="/company/"] img'); k++) root = root.parentElement;
+    for (const im of root.querySelectorAll('img')) {
+      if (descNode && descNode.contains(im)) continue;
+      const u = srcOf(im); if (!u) continue;
+      const hint = (im.className + ' ' + im.alt + ' ' + u + ' ' + (im.closest('a') ? im.closest('a').getAttribute('href') || '' : '')).toLowerCase();
+      const w = im.naturalWidth || im.width || 0;
+      let sc = 0;
+      if (/logo/.test(hint)) sc += 3;
+      if (/\/company\/|\/companies\/|company-logo|comp-|compan/.test(hint)) sc += 2;
+      if (/profile|avatar|ghost|person|banner|sprite|icon-|emoji/.test(hint)) sc -= 4;
+      if (w && (w < 20 || w > 400)) sc -= 3;
+      if (sc > bestScore) { best = u; bestScore = sc; }
+    }
+    if (best) out.logo = best;
   }
   for (const sel of ['meta[property="og:site_name"]', 'meta[name="author"]', 'meta[name="application-name"]']) { const m = document.querySelector(sel); if (m) addCo(m.content, 'meta'); }
   for (const part of clean(document.title).split(/\s+[|\u2013\u2014-]\s+/)) addCo(part, 'title');
