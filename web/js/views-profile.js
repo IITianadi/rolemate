@@ -19,7 +19,7 @@ function dropzone(onFile) {
   return zone;
 }
 
-const upload = (file) => { const form = new FormData(); form.append('file', file); return api('/api/profile/resume', { method: 'POST', form }); };
+const upload = (file, reset = false) => { const form = new FormData(); form.append('file', file); if (reset) form.append('reset', '1'); return api('/api/profile/resume', { method: 'POST', form }); };
 const initials = (n) => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 // Everything here is read from the resume; the candidate is not asked to type any of it.
@@ -92,14 +92,23 @@ export async function profileView(me, go) {
     const facts = {}; for (const [k, el] of Object.entries(fields)) facts[k] = el.value.trim();
     try { await api('/api/profile', { method: 'PUT', body: { facts, confirmedSkills: confirmed } }); toast('Saved'); } catch (e) { toast(e.message, true); }
   };
-  const reupload = dropzone(async (file) => {
+  const fileInput = h('input', { type: 'file', accept: '.pdf,.docx,.txt', hidden: true, onchange: async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const hasOld = confirmed.length > 0 || Object.values(f).some(Boolean);
+    const fresh = hasOld && window.confirm('Start fresh?\n\nOK: also clear the skills and details you confirmed from the old resume.\nCancel: keep them.');
     clear(host); host.append(spinner('Reading your resume…'));
-    try { const r = await upload(file); clear(host); host.append(h('div', { class: 'welcome', style: 'margin-top:0' }, h('h1', null, 'Does this look right?'), profileSummary(r.derived), h('div', { class: 'row', style: 'justify-content:center;margin-top:16px' }, h('button', { class: 'btn primary lg', onclick: () => go('#/tracking') }, 'Looks good')))); }
-    catch (e) { toast(e.message, true); location.reload(); }
-  });
+    try { const r = await upload(file, fresh); clear(host); host.append(h('div', { class: 'welcome', style: 'margin-top:0' }, h('h1', null, 'Does this look right?'), profileSummary(r.derived), h('div', { class: 'row', style: 'justify-content:center;margin-top:16px' }, h('button', { class: 'btn primary lg', onclick: () => go('#/tracking') }, 'Looks good'), h('button', { class: 'btn lg', onclick: () => go('#/profile/resume') }, 'Fix details')))); }
+    catch (x) { toast(x.message, true); location.reload(); }
+  } });
+  const resumeCard = h('div', { class: 'card' },
+    h('div', { class: 'row between' },
+      h('div', null, h('h2', { style: 'margin:0' }, 'Your resume'), h('p', { class: 'muted small', style: 'margin:4px 0 0' }, `Uploaded as ${(profile.format || 'file').toUpperCase()}. Wrong file? Upload the right one. Tailored resumes you already made are kept.`)),
+      h('div', { class: 'row' }, fileInput,
+        h('button', { class: 'btn', onclick: () => fileInput.click() }, 'Upload a different resume'),
+        h('button', { class: 'btn primary', onclick: () => go('#/profile/resume') }, 'Edit resume'))));
   append(host,
     pageHead('Profile'),
-    nextStep({ title: 'Is everything correct?', sub: 'Every tailored resume starts from this one.', actions: [h('button', { class: 'btn primary', onclick: () => go('#/profile/resume') }, 'Edit resume')] }),
+    resumeCard,
     profile.warnings.length > 0 && h('div', { class: 'notice' }, profile.warnings.join(' ')),
     profileSummary(profile.derived),
     h('div', { class: 'card' }, h('h2', null, 'Skills you’ve confirmed'), chips, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: save }, 'Save changes'))),
@@ -107,7 +116,7 @@ export async function profileView(me, go) {
       h('div', { class: 'grid3' }, field('noticePeriod', 'Notice period', 'e.g. 30 days'), field('currentCtc', 'Current CTC', 'e.g. 12 LPA'), field('expectedCtc', 'Expected CTC', 'e.g. 16 LPA'),
         field('location', 'Location', profile.derived.location || ''), field('relocation', 'Open to relocate?', ''), field('yearsExperience', 'Years of experience', profile.derived.yearsExperience ? `Detected ${profile.derived.yearsExperience}` : '', 'number')),
       h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn primary sm', onclick: save }, 'Save'))),
-    h('div', { class: 'card' }, h('h2', null, 'Replace your resume'), h('p', { class: 'muted small' }, 'Your tailored versions stay.'), reupload));
+  );
   return host;
 }
 

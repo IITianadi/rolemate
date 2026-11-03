@@ -171,9 +171,11 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const resume = parsed.resume;
     const extracted = { text: parsed.text, format: parsed.format };
     const prev = getProfile(req.user.id);
+    // reset=1: the old resume was the wrong one, so also drop the skills and details confirmed against it.
+    const fresh = req.body?.reset === '1';
     db.prepare(`INSERT INTO profiles (user_id, resume, original_text, source_format, facts, confirmed_skills) VALUES (?,?,?,?,?,?)
-      ON CONFLICT(user_id) DO UPDATE SET resume = excluded.resume, original_text = excluded.original_text, source_format = excluded.source_format, updated_at = datetime('now')`)
-      .run(req.user.id, JSON.stringify(resume), extracted.text.slice(0, 60000), extracted.format, JSON.stringify(prev?.facts || {}), JSON.stringify(prev?.confirmedSkills || []));
+      ON CONFLICT(user_id) DO UPDATE SET resume = excluded.resume, original_text = excluded.original_text, source_format = excluded.source_format, facts = excluded.facts, confirmed_skills = excluded.confirmed_skills, updated_at = datetime('now')`)
+      .run(req.user.id, JSON.stringify(resume), extracted.text.slice(0, 60000), extracted.format, JSON.stringify(fresh ? {} : prev?.facts || {}), JSON.stringify(fresh ? [] : prev?.confirmedSkills || []));
     res.status(201).json({ resume, derived: deriveProfile(resume), warnings: parseWarnings(resume), format: extracted.format, originalText: extracted.text.slice(0, 20000) });
   });
 

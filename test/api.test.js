@@ -50,6 +50,18 @@ test('capture before uploading a resume is refused with guidance', async () => {
   assert.equal(r.status, 409);
 });
 
+test('re-uploading a resume keeps confirmed skills unless reset=1', async () => {
+  await api('/api/profile/resume', { method: 'POST', body: uploadForm(resumeTxt, 'resume.txt') });
+  await api('/api/profile', { method: 'PUT', body: { facts: { noticePeriod: '30 days' }, confirmedSkills: ['Kubernetes'] } });
+  await api('/api/profile/resume', { method: 'POST', body: uploadForm(resumeTxt, 'resume.txt') });
+  let p = (await api('/api/profile')).data.profile;
+  assert.deepEqual([p.confirmedSkills, p.facts.noticePeriod], [['Kubernetes'], '30 days'], 'plain re-upload keeps them');
+  const f = uploadForm(resumeTxt, 'resume.txt'); f.append('reset', '1');
+  await api('/api/profile/resume', { method: 'POST', body: f });
+  p = (await api('/api/profile')).data.profile;
+  assert.deepEqual([p.confirmedSkills, p.facts], [[], {}], 'reset=1 starts fresh');
+});
+
 test('resume upload keeps the original structure', async () => {
   const r = await api('/api/profile/resume', { method: 'POST', body: uploadForm(resumeTxt, 'resume.txt') });
   assert.equal(r.status, 201);
