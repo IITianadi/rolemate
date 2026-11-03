@@ -54,8 +54,9 @@ async function route() {
 
   const [, page, arg] = hash.match(/^#\/([\w-]+)(?:\/(.+))?$/) || [];
   const needsResume = !me.hasResume && !['profile', 'settings', 'welcome'].includes(page);
-  const wide = ['resume', 'job', 'tracking'].includes(page) && !needsResume;
-  const main = h('main', { class: `main ${wide ? '' : 'narrow'}` }, spinner());
+  const editing = page === 'resume' || (page === 'profile' && arg === 'resume');
+  const wide = (['resume', 'job', 'tracking'].includes(page) || editing) && !needsResume;
+  const main = h('main', { class: `main ${wide ? '' : 'narrow'} ${editing ? 'wideedit' : ''}` }, spinner());
   clear(root); root.append(shell(needsResume ? 'welcome' : page, main));
   try {
     let view;
