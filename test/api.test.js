@@ -274,3 +274,15 @@ test('a scanned page logo is kept only when its label names the job\'s company',
   r = await cap(3, { logo: 'https://x.example/acme.png', logoHow: 'scan', logoAlt: 'Acme Payments logo' });
   assert.equal(r.data.job.logo, 'https://x.example/acme.png');
 });
+
+test('brand logo lookup accepts only a close name match and does nothing without a client ID', async () => {
+  const { findCompanyLogo, sameBrand } = await import('../server/lib/logo.js');
+  assert.ok(sameBrand('Razorpay Software Pvt Ltd', 'Razorpay'));
+  assert.ok(!sameBrand('Apex', 'Apex Legends'));
+  assert.ok(!sameBrand('Disney', 'Acme'));
+  const fakeFetch = (list) => async () => ({ ok: true, json: async () => list });
+  const found = await findCompanyLogo('Razorpay', { clientId: 'ID1', fetchFn: fakeFetch([{ name: 'Razor', domain: 'razor.com' }, { name: 'Razorpay', domain: 'razorpay.com' }]) });
+  assert.equal(found, 'https://cdn.brandfetch.io/razorpay.com?c=ID1');
+  assert.equal(await findCompanyLogo('Disney', { clientId: 'ID1', fetchFn: fakeFetch([{ name: 'Acme', domain: 'acme.com' }]) }), '');
+  assert.equal(await findCompanyLogo('Razorpay', { clientId: '', fetchFn: fakeFetch([]) }), '');
+});

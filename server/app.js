@@ -14,6 +14,7 @@ import { aiEnabled, aiLastError, aiModel, streamChat } from './lib/ai.js';
 import { deriveProfile } from './lib/derive.js';
 import { getCompanyResearch } from './lib/research.js';
 import { buildPrep, chatSystem } from './lib/prep.js';
+import { findCompanyLogo } from './lib/logo.js';
 import { createHash } from 'node:crypto';
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -263,6 +264,11 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       const info = db.prepare('INSERT INTO jobs (user_id, title, company, location, url, source, jd_text, requirements, match, job_key, logo) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
         .run(req.user.id, reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), url, source, text, JSON.stringify(reqs), JSON.stringify(match), jobKey, logo);
       jobId = Number(info.lastInsertRowid);
+    }
+    // No logo from the page: look the company up by name in the background so the capture itself stays fast.
+    if (!jobRow(req.user.id, jobId).logo && reqs.company) {
+      const uid = req.user.id;
+      findCompanyLogo(reqs.company).then((u) => { if (u) db.prepare("UPDATE jobs SET logo = ? WHERE id = ? AND user_id = ? AND logo = ''").run(u, jobId, uid); }).catch(() => {});
     }
     const jobR = jobRow(req.user.id, jobId);
     const t = await tailorJob(req.user, profile, jobR);
