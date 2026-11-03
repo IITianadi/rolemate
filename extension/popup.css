@@ -1,8 +1,9 @@
-/* Neutral, white, conversational: matches the dashboard. */
-:root { --bg:#fff; --ink:#0d0d0d; --muted:#6b6b6b; --line:#e7e7e7; --soft:#f7f7f8; --btn:#0d0d0d; --btn-ink:#fff; --good:#0b7a5a; --good-bg:#e7f5ef; --warn:#8a5a00; --warn-bg:#fff3d4; --bad:#c0352b; --bad-bg:#fdecea; }
-@media (prefers-color-scheme: dark) { :root { --bg:#212121; --ink:#ececec; --muted:#9b9b9b; --line:#363636; --soft:#2a2a2a; --btn:#ececec; --btn-ink:#0d0d0d; --good:#6fd3ac; --good-bg:#153326; --warn:#f0c36b; --warn-bg:#3a2f12; --bad:#ff9c92; --bad-bg:#3b1b18; } }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/inter.woff2") format("woff2"); }
+/* Matches the dashboard: Inter, white surfaces, brand blue (#2f6bff) pill buttons. */
+:root { --bg:#fff; --ink:#0d0d0d; --muted:#6b6b6b; --line:#e7e7e7; --soft:#f7f7f8; --btn:#2f6bff; --btn-ink:#fff; --good:#0b7a5a; --good-bg:#e7f5ef; --warn:#8a5a00; --warn-bg:#fff3d4; --bad:#c0352b; --bad-bg:#fdecea; }
+@media (prefers-color-scheme: dark) { :root { --bg:#212121; --ink:#ececec; --muted:#9b9b9b; --line:#363636; --soft:#2a2a2a; --btn:#2f6bff; --btn-ink:#fff; --good:#6fd3ac; --good-bg:#153326; --warn:#f0c36b; --warn-bg:#3a2f12; --bad:#ff9c92; --bad-bg:#3b1b18; } }
 * { box-sizing: border-box; }
-body { width: 340px; margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+body { width: 340px; margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 Inter, ui-sans-serif, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 .wrap { padding: 16px; } h1 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; } .brand::before { content: ""; width: 22px; height: 22px; background: url(icons/32.png) center / contain no-repeat; } .brand span { font-weight: 650; }
 .muted { color: var(--muted); } .small { font-size: 12px; }
