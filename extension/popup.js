@@ -119,7 +119,7 @@ function extractPage() {
   if (!out.logo && panel) {
     const srcOf = (i) => httpUrl(i.currentSrc || i.getAttribute('src') || '') || httpUrl(i.getAttribute('data-delayed-url') || i.getAttribute('data-src') || i.getAttribute('data-lazy-src') || '');
     let best = null; let bestScore = 0;
-    let root = panel; for (let k = 0; k < 4 && root.parentElement && root.parentElement !== document.body && !root.querySelector('img[class*="logo" i], img[alt*="logo" i], a[href*="/company/"] img'); k++) root = root.parentElement;
+    const root = panel;
     for (const im of root.querySelectorAll('img')) {
       if (descNode && descNode.contains(im)) continue;
       const u = srcOf(im); if (!u) continue;
@@ -130,9 +130,9 @@ function extractPage() {
       if (/\/company\/|\/companies\/|company-logo|comp-|compan/.test(hint)) sc += 2;
       if (/profile|avatar|ghost|person|banner|sprite|icon-|emoji/.test(hint)) sc -= 4;
       if (w && (w < 20 || w > 400)) sc -= 3;
-      if (sc > bestScore) { best = u; bestScore = sc; }
+      if (sc > bestScore) { best = u; bestScore = sc; out.logoAlt = (im.alt || im.getAttribute('aria-label') || '').slice(0, 120); }
     }
-    if (best) out.logo = best;
+    if (best) { out.logo = best; out.logoHow = 'scan'; } else out.logoAlt = '';
   }
   for (const sel of ['meta[property="og:site_name"]', 'meta[name="author"]', 'meta[name="application-name"]']) { const m = document.querySelector(sel); if (m) addCo(m.content, 'meta'); }
   for (const part of clean(document.title).split(/\s+[|\u2013\u2014-]\s+/)) addCo(part, 'title');
@@ -185,7 +185,7 @@ async function capture(btn) {
     const [{ result: page }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractPage });
     if (!page || page.text.length < 80) throw new Error('Not enough text found. Select the job description on the page and try again.');
     btn.textContent = 'Matching to your resume…';
-    const res = await callApi('/api/capture', { method: 'POST', body: { url: page.url, externalId: page.externalId, source: page.source, text: page.text, hints: { title: page.title, titleTrusted: page.titleTrusted && !page.selection, titleCandidates: page.titleCandidates, company: page.company, companyTrusted: !!page.companyTrusted, companyCandidates: page.companyCandidates, location: page.location, logo: page.logo, companyDomain: page.companyDomain } } });
+    const res = await callApi('/api/capture', { method: 'POST', body: { url: page.url, externalId: page.externalId, source: page.source, text: page.text, hints: { title: page.title, titleTrusted: page.titleTrusted && !page.selection, titleCandidates: page.titleCandidates, company: page.company, companyTrusted: !!page.companyTrusted, companyCandidates: page.companyCandidates, location: page.location, logo: page.logo, companyDomain: page.companyDomain, logoAlt: page.logoAlt, logoHow: page.logoHow } } });
     await showResult(res);
   } catch (e) {
     if (e.status === 401) return loginScreen('Please sign in again.');

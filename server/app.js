@@ -14,7 +14,6 @@ import { aiEnabled, aiLastError, aiModel, streamChat } from './lib/ai.js';
 import { deriveProfile } from './lib/derive.js';
 import { getCompanyResearch } from './lib/research.js';
 import { buildPrep, chatSystem } from './lib/prep.js';
-import { findCompanyDomain, faviconFor } from './lib/logo.js';
 import { createHash } from 'node:crypto';
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -231,7 +230,14 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     // Logo: only an https image address the page itself showed; otherwise the company website's icon. Stored as a plain
     // string and shown by the browser (the server never fetches it).
     const logo = (() => {
-      const u = String(hin.logo || '').slice(0, 600);
+      let u = String(hin.logo || '').slice(0, 600);
+      // An image found by scanning the page is kept only when its own label names this company; otherwise it may belong
+      // to another card on the page. A wrong logo is worse than none.
+      if (hin.logoHow === 'scan') {
+        const norm = (x) => String(x || '').toLowerCase().replace(/\b(logo|pvt|private|ltd|limited|inc|llc|llp|corp|india|technologies|technology|solutions)\b/g, ' ').replace(/[^a-z0-9]+/g, '');
+        const alt = norm(hin.logoAlt), co = norm(reqs.company);
+        if (!alt || !co || !(alt.includes(co) || co.includes(alt))) u = '';
+      }
       try { if (u && new URL(u).protocol === 'https:') return u; } catch { /* not a URL */ }
       const d = String(hin.companyDomain || '').toLowerCase().slice(0, 120);
       return /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(d) ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=128` : '';
@@ -257,11 +263,6 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       const info = db.prepare('INSERT INTO jobs (user_id, title, company, location, url, source, jd_text, requirements, match, job_key, logo) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
         .run(req.user.id, reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), url, source, text, JSON.stringify(reqs), JSON.stringify(match), jobKey, logo);
       jobId = Number(info.lastInsertRowid);
-    }
-    // No logo from the page: look the company up in the background so the capture itself stays fast.
-    if (!logo && reqs.company && !jobRow(req.user.id, jobId).logo) {
-      const uid = req.user.id;
-      findCompanyDomain(reqs.company).then((d) => { if (d) db.prepare("UPDATE jobs SET logo = ? WHERE id = ? AND user_id = ? AND logo = ''").run(faviconFor(d), jobId, uid); }).catch(() => {});
     }
     const jobR = jobRow(req.user.id, jobId);
     const t = await tailorJob(req.user, profile, jobR);

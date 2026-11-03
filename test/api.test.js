@@ -265,11 +265,12 @@ test('capture stores the company logo and posting URL; unsafe logos are ignored'
   assert.equal(r.data.job.logo, '', 'http logos are not stored');
 });
 
-test('logo lookup guesses company domains and only keeps names that resolve', async () => {
-  const { domainGuesses, findCompanyDomain } = await import('../server/lib/logo.js');
-  assert.ok(domainGuesses('Acme Payments Pvt. Ltd.').includes('acmepayments.com'));
-  const seen = [];
-  const d = await findCompanyDomain('Razorpay Software Pvt Ltd', async (x) => { seen.push(x); if (x !== 'razorpay.com') throw new Error('nx'); return {}; });
-  assert.equal(d, 'razorpay.com');
-  assert.equal(await findCompanyDomain('Nope Co', async () => { throw new Error('nx'); }), '');
+test('a scanned page logo is kept only when its label names the job\'s company', async () => {
+  const cap = (n, hints) => api('/api/capture', { method: 'POST', body: { text: jdTxt, url: `https://jobs.example/scan/${n}`, source: 'jobs.example', hints: { company: 'Acme Payments', ...hints } } });
+  let r = await cap(1, { logo: 'https://x.example/disney.png', logoHow: 'scan', logoAlt: 'Disney logo' });
+  assert.equal(r.data.job.logo, '', 'a logo labelled for another company is dropped');
+  r = await cap(2, { logo: 'https://x.example/a.png', logoHow: 'scan', logoAlt: '' });
+  assert.equal(r.data.job.logo, '', 'an unlabelled scanned image is dropped');
+  r = await cap(3, { logo: 'https://x.example/acme.png', logoHow: 'scan', logoAlt: 'Acme Payments logo' });
+  assert.equal(r.data.job.logo, 'https://x.example/acme.png');
 });
