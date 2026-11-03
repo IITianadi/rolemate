@@ -13,7 +13,7 @@
     "storage"
   ],
   "host_permissions": [
-    "http://localhost:3000/*"
+    "https://app.rolemate.in/*"
   ],
   "optional_host_permissions": [
     "https://*/*",

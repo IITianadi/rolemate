@@ -2,7 +2,7 @@
 // (activeTab permission) and sent to the user's own Rolemate server.
 'use strict';
 
-const DEFAULT_SERVER = 'http://localhost:3000';
+const DEFAULT_SERVER = 'https://app.rolemate.in';
 const root = document.getElementById('root');
 const store = {
   get: () => chrome.storage.local.get({ server: DEFAULT_SERVER, token: '', email: '' }),
@@ -25,7 +25,7 @@ async function callApi(path, { method = 'GET', body } = {}) {
   let res;
   try {
     res = await fetch(server.replace(/\/$/, '') + path, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
-  } catch { throw Object.assign(new Error(`Can't reach ${server}. Is the Rolemate server running?`), { network: true }); }
+  } catch { throw Object.assign(new Error(`Can't reach Rolemate right now. Check your internet connection and try again.`), { network: true }); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status, data });
   return data;
