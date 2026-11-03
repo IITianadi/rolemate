@@ -41,7 +41,7 @@ function shell(page, main) {
       onclick: (e) => { const svg = e.currentTarget.querySelector('svg'); if (svg && logoPlaying(svg)) armLogo(); },
     }, brandLogo({ height: 32, label: BRAND.name })),
     h('nav', { class: 'navtabs', 'aria-label': 'Main' }, TABS.map(([href, label]) => h('a', { href, class: `navitem ${href === active ? 'active' : ''}` }, label))),
-    h('div', { class: 'nav-actions' }, me.aiEnabled && h('span', { class: 'ai-badge' }, icon('sparkle'), 'AI on'),
+    h('div', { class: 'nav-actions' }, 
       h('button', { class: 'btn primary sm', onclick: () => requestAdd(go) }, icon('plus', 15), 'Add job'), wrap)));
   return h('div', { class: 'app' }, nav, main);
 }

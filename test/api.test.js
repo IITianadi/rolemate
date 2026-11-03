@@ -303,3 +303,10 @@ test('free credits: one per job over the account lifetime; prep and chat need a 
   const me = await api('/api/me');
   assert.deepEqual([me.data.quota.used, me.data.quota.limit, me.data.quota.remaining], [4, 4, 0]);
 });
+
+test('the app never tells users which AI or model runs; owner status needs the admin key', async () => {
+  const me = (await api('/api/me')).data;
+  assert.equal('aiModel' in me, false);
+  assert.equal('aiError' in me, false);
+  assert.equal((await api('/api/admin/ai-status')).status, 404);
+});

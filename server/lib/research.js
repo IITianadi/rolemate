@@ -81,7 +81,7 @@ export async function basicResearch(company, fetchImpl) {
   const wiki = await wikipediaSnapshot(company, fetchImpl);
   return normalizeResearch({
     company: { summary: wiki?.summary || '', industry: wiki?.industry || '' },
-    gaps: ['Employee reviews, interview reports and salary data are researched in AI mode (web search). Add an Anthropic API key to turn it on.'],
+    gaps: ['Employee reviews, interview reports and pay data are not available for this company yet.'],
   }, wiki?.url ? [{ title: `${wiki.title} (Wikipedia)`, url: wiki.url }] : [], 'basic');
 }
 

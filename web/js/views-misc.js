@@ -59,19 +59,6 @@ export async function settingsView(me, go) {
     h('div', { class: 'card' }, h('h2', null, 'Delete account'), h('p', { class: 'muted small' }, 'Permanently deletes your resume, jobs and tailored versions.'),
       h('div', { class: 'row' }, del, h('button', { class: 'btn danger', onclick: async () => { try { await api('/api/account', { method: 'DELETE', body: { confirm: del.value.trim() } }); setToken(''); go('#/login'); } catch (e) { toast(e.message, true); } } }, 'Delete everything'))));
 
-  const ai = () => h('div', { class: 'card stack' },
-    h('div', { class: 'row between' }, h('div', null, h('h2', null, 'AI'), h('p', { class: 'muted small', style: 'margin:0' }, 'Company research, interview prep and chat.')), me.aiEnabled ? h('span', { class: 'ai-badge' }, icon('sparkle'), `On · ${me.aiModel}`) : h('span', { class: 'chip' }, 'Off · basic mode')),
-    me.aiEnabled
-      ? h('p', { class: 'muted', style: 'margin:0' }, 'AI is reading jobs, researching companies on the public web, writing your interview prep and powering Ask AI.')
-      : h('p', { class: 'muted', style: 'margin:0' }, 'Without a key everything still works with rules (matching, tailoring, a basic prep). With a key you also get company research with review themes and interview reports (with sources), answers written around that company, and the Ask AI chat.'),
-    me.aiError && h('div', { class: 'error' }, h('strong', null, 'Last AI error: '), me.aiError.message),
-    !me.aiEnabled && h('ol', { class: 'steps' },
-      h('li', null, h('div', null, 'Create an API key at ', h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener noreferrer' }, 'console.anthropic.com'), '.')),
-      h('li', null, h('div', null, 'In the ', h('code', null, 'tailorkit'), ' folder, create a file named ', h('code', null, '.env'), ' with this line (use your key):', codeBlock('ANTHROPIC_API_KEY=sk-ant-...'))),
-      h('li', null, h('div', null, 'Stop the server (Ctrl+C in Terminal) and start it again:', codeBlock('npm start'))),
-      h('li', null, h('div', null, 'Reload this page. The sidebar will show “AI on”.'))),
-    h('p', { class: 'muted small', style: 'margin:0' }, 'Company research uses public web search and cites its sources. It does not log in to or scrape review sites. To change cost or speed, set TAILORKIT_MODEL in .env (for example claude-sonnet-5-5).'));
-
   const extension = () => h('div', { class: 'card' }, h('h2', null, 'Chrome extension'), h('p', { class: 'muted small' }, 'One click on any job page.'), EXT_STEPS());
 
   const billing = () => {
@@ -81,7 +68,7 @@ export async function settingsView(me, go) {
       (q.limit != null && q.remaining <= 0) ? paywall(q) : h('p', { class: 'muted small', style: 'margin:14px 0 0' }, 'Each job uses one free resume. It covers saving the job, tailoring, interview prep and Ask AI for that job.')));
   };
 
-  const tabs = [['account', 'Account', account], ['ai', 'AI', ai], ['extension', 'Extension', extension], ['billing', 'Plan', billing]];
+  const tabs = [['account', 'Account', account], ['extension', 'Extension', extension], ['billing', 'Plan', billing]];
   const draw = () => {
     clear(body); body.append(tabs.find((t) => t[0] === tab)[2]());
     [...bar.children].forEach((b, i) => b.classList.toggle('on', tabs[i][0] === tab));

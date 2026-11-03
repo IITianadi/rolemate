@@ -134,7 +134,7 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
     clear(sugHost);
     const pending = sugs.filter((s) => s.status === 'pending');
     if (!suggestions.length && !sugs.length) {
-      sugHost.append(h('p', { class: 'muted small' }, aiEnabled ? 'No rewording suggestions for this job.' : 'AI rewording suggestions are off on this server. Your bullets were reordered by relevance instead.'));
+      sugHost.append(h('p', { class: 'muted small' }, 'No rewording suggestions for this job. Your bullets were reordered by relevance.'));
       return;
     }
     sugHost.append(h('h3', null, `Suggested rewordings (${pending.length})`));

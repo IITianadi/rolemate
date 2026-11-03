@@ -104,7 +104,7 @@ test('research: with no key it falls back to a basic snapshot and says what is m
   const r = await getCompanyResearch(db, { company: 'Acme Payments', role: 'Engineer', fetchImpl });
   assert.equal(r.mode, 'basic');
   assert.match(r.company.summary, /payments company/);
-  assert.match(r.gaps[0], /AI mode/);
+  assert.match(r.gaps[0], /not available/);
   assert.equal(r.sources[0].url, 'https://en.wikipedia.org/wiki/Acme_Payments');
   const wrong = await getCompanyResearch(db, { company: 'Zzz Unknown', role: 'x', fetchImpl: async () => ({ ok: true, json: async () => ({ pages: [{ title: 'Zzz something else', description: 'a river in Peru' }] }) }) });
   assert.equal(wrong.company.summary, '', 'an unrelated page is not used');
@@ -207,7 +207,7 @@ test('API: prep stream with AI, cached GET, stale after the resume changes; chat
     assert.equal((await call(`/api/jobs/${id}/chat`, { method: 'POST', body: { messages: [] } })).status, 400);
 
     setClientForTests(null); delete process.env.ANTHROPIC_API_KEY;
-    assert.equal((await call(`/api/jobs/${id}/chat`, { method: 'POST', body: { messages: [{ role: 'user', content: 'hi' }] } })).status, 409);
+    assert.equal((await call(`/api/jobs/${id}/chat`, { method: 'POST', body: { messages: [{ role: 'user', content: 'hi' }] } })).status, 503);
   } finally { server.close(); }
 });
 

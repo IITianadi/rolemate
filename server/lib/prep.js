@@ -64,7 +64,7 @@ export async function buildPrep(ctx) {
     c.research ? fence('company_research', JSON.stringify(c.research)) : 'No company research is available; do not make company claims.',
   ].join('\n'), { maxTokens: 9000, effort: 'medium' });
   const prep = normalizePrep(raw);
-  if (!prep) return { ...buildBasicPrep(ctx), aiFailed: aiLastError()?.message || 'The AI response could not be used.' };
+  if (!prep) return { ...buildBasicPrep(ctx), aiFailed: true };
   return prep;
 }
 

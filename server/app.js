@@ -131,6 +131,13 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     return { resumeId: Number(info.lastInsertRowid), changes, suggestions, quota: quota(user) };
   }
 
+  // Owner-only check of what the AI layer is doing. Send the header x-admin-key (the ADMIN_KEY variable). Not part of the app UI.
+  app.get('/api/admin/ai-status', (req, res) => {
+    const key = process.env.ADMIN_KEY || '';
+    if (!key || req.get('x-admin-key') !== key) return res.status(404).json({ error: 'Not found' });
+    res.json({ aiEnabled: aiEnabled(), model: aiEnabled() ? aiModel() : null, researchModel: process.env.TAILORKIT_RESEARCH_MODEL || null, lastError: aiLastError() });
+  });
+
   // ---------- auth
   app.post('/api/auth/signup', authLimit, (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
@@ -154,7 +161,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
 
   app.get('/api/me', auth, (req, res) => {
     const p = getProfile(req.user.id);
-    res.json({ user: { email: req.user.email, plan: req.user.plan }, quota: quota(req.user), hasResume: !!p, aiEnabled: aiEnabled(), aiModel: aiEnabled() ? aiModel() : null, aiError: aiLastError() });
+    res.json({ user: { email: req.user.email, plan: req.user.plan }, quota: quota(req.user), hasResume: !!p, aiEnabled: aiEnabled() });
   });
 
   // ---------- waitlist (used by the marketing website; set ALLOWED_ORIGINS to the site's origin)
@@ -378,7 +385,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const profile = needProfile(req.user.id);
     const r = jobRow(req.user.id, req.params.id);
     if (!hasCredit(req.user, r.id)) throw httpError(402, OUT_OF_CREDITS(freeLimit));
-    if (!aiEnabled()) throw httpError(409, 'Ask AI needs an Anthropic API key. See Settings.');
+    if (!aiEnabled()) throw httpError(503, 'Ask is unavailable right now. Please try again later.');
     // Safety cap so one job cannot run up the AI bill: at most 60 questions per job.
     const asked = db.prepare('INSERT INTO job_chat (job_id, n) VALUES (?, 1) ON CONFLICT(job_id) DO UPDATE SET n = n + 1 RETURNING n').get(r.id).n;
     if (asked > 60) throw httpError(429, 'You have reached the question limit for this job.');
@@ -400,7 +407,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       send({ type: 'done' });
     } catch (e) {
       console.warn('[chat]', e.message);
-      send({ type: 'error', message: e.status === 401 ? 'The API key was rejected.' : 'The AI request failed. Please try again.' });
+      send({ type: 'error', message: 'Ask is unavailable right now. Please try again in a moment.' });
     }
     res.end();
   });

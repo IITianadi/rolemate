@@ -96,7 +96,7 @@ export async function jobView(id, me, go) {
     return h('div', null,
       sec(`About ${job.company || 'the company'}`, 'building'),
       h('div', { class: 'card stack' },
-        h('div', { class: 'row' }, r.mode === 'ai' ? aiBadge() : h('span', { class: 'chip' }, 'Basic mode'), r.mode === 'ai' && cov('Reviews', r.coverage?.reviews || 'none'), r.mode === 'ai' && cov('Interview reports', r.coverage?.interview || 'none'),
+        h('div', { class: 'row' }, r.mode === 'ai' && aiBadge(), r.mode === 'ai' && cov('Reviews', r.coverage?.reviews || 'none'), r.mode === 'ai' && cov('Interview reports', r.coverage?.interview || 'none'),
           r.cached && h('span', { class: 'muted small' }, 'from a recent lookup')),
         c.summary ? h('p', { style: 'margin:0' }, c.summary) : h('p', { class: 'muted', style: 'margin:0' }, 'No public company summary was found.'),
         !!(c.industry || c.size || c.hq) && h('div', { class: 'reqs' }, [c.industry, c.size, c.hq].filter(Boolean).map((x) => h('span', { class: 'chip' }, x))),
@@ -122,21 +122,19 @@ export async function jobView(id, me, go) {
     if (state.running || (!state.prep && !state.error)) {
       const steps = state.steps.length ? state.steps : ['Getting started…'];
       return h('div', { class: 'card', style: 'max-width:640px' },
-        h('div', { class: 'row' }, aiBadge(), h('strong', null, me.aiEnabled ? 'Researching and preparing your interview brief' : 'Preparing your interview brief')),
+        h('div', { class: 'row' }, aiBadge(), h('strong', null, 'Preparing your interview brief')),
         h('div', { class: 'progress', style: 'margin:18px 0 6px;max-width:none' }, steps.map((t, i) => h('div', { class: `stepline ${i < steps.length - 1 ? 'done' : ''}` }, i < steps.length - 1 ? icon('check') : h('span', { class: 'spin' }), t))),
         h('div', { class: 'shimmer', style: 'width:90%' }), h('div', { class: 'shimmer', style: 'width:75%' }), h('div', { class: 'shimmer', style: 'width:82%' }),
-        me.aiEnabled && h('p', { class: 'muted small' }, 'Searching the web can take a minute the first time. Results are saved.'));
+        h('p', { class: 'muted small' }, 'This can take a minute the first time. Results are saved.'));
     }
     if (state.error && !state.prep) return h('div', { class: 'card stack' }, h('div', { class: 'error' }, state.error), h('div', null, h('button', { class: 'btn primary', onclick: () => runPrep(false) }, 'Try again')));
 
     const p = state.prep; const b = p.brief || {};
     append(el,
       h('div', { class: 'row between' },
-        h('div', { class: 'row' }, p.mode === 'ai' ? aiBadge() : h('span', { class: 'chip' }, 'Basic mode'), h('span', { class: 'muted small' }, state.createdAt ? `Prepared ${fmtDate(state.createdAt)}` : '')),
+        h('div', { class: 'row' }, p.mode === 'ai' && aiBadge(), h('span', { class: 'muted small' }, state.createdAt ? `Prepared ${fmtDate(state.createdAt)}` : '')),
         h('button', { class: 'btn sm', onclick: () => runPrep(true) }, icon('refresh', 15), 'Refresh')),
       state.stale && h('div', { class: 'notice', style: 'margin-top:12px' }, 'Your resume or settings changed since this was prepared. Refresh to update it.'),
-      p.aiFailed && h('div', { class: 'notice', style: 'margin-top:12px' }, `AI couldn’t be used for this one (${p.aiFailed}). Showing the basic version.`),
-      !me.aiEnabled && h('div', { class: 'card soft', style: 'margin-top:12px' }, h('div', { class: 'row between' }, h('div', null, h('strong', null, 'Turn on AI for the full picture'), h('div', { class: 'muted small' }, 'Employee review themes, reported interview questions, news and answers written around this company.')), h('a', { class: 'btn primary sm', href: '#/settings' }, 'Set up AI'))),
       sec('The role', 'target'), h('div', { class: 'oneliner' }, b.oneLiner || job.title),
       h('div', { class: 'cols2', style: 'margin-top:14px' },
         h('div', { class: 'card' }, h('h3', null, 'What they’re looking for'), list(b.whatTheyWant) || h('p', { class: 'muted small' }, 'No clear requirements detected.')),
@@ -160,9 +158,7 @@ export async function jobView(id, me, go) {
 
   // ---------- Ask AI (streaming chat)
   function chatView() {
-    if (!me.aiEnabled) return h('div', { class: 'card stack', style: 'max-width:640px' }, h('div', { class: 'row' }, aiBadge(), h('strong', null, 'Ask AI needs an API key')),
-      h('p', { class: 'muted', style: 'margin:0' }, 'Chat with an assistant that has read this job, your resume and the company research. Ask it to rehearse answers, draft a message to the recruiter, or explain a requirement.'),
-      h('div', null, h('a', { class: 'btn primary', href: '#/settings' }, 'Set up AI')));
+    if (!me.aiEnabled) return h('div', { class: 'card stack', style: 'max-width:640px' }, h('div', { class: 'row' }, aiBadge(), h('strong', null, 'Ask is unavailable right now')), h('p', { class: 'muted', style: 'margin:0' }, 'Please try again later.'));
     const thread = h('div', { class: 'thread' });
     const input = h('textarea', { rows: 1, placeholder: 'Ask anything about this job…', 'aria-label': 'Message' });
     const send = h('button', { class: 'send', 'aria-label': 'Send', disabled: true }, icon('send', 18));
