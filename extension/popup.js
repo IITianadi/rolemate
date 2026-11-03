@@ -5,7 +5,8 @@
 const DEFAULT_SERVER = 'https://app.rolemate.in';
 const root = document.getElementById('root');
 const store = {
-  get: () => chrome.storage.local.get({ server: DEFAULT_SERVER, token: '', email: '' }),
+  // The server is fixed: the extension only ever talks to Rolemate.
+  get: async () => ({ ...(await chrome.storage.local.get({ token: '', email: '' })), server: DEFAULT_SERVER }),
   set: (v) => chrome.storage.local.set(v),
 };
 
@@ -29,12 +30,6 @@ async function callApi(path, { method = 'GET', body } = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status, data });
   return data;
-}
-
-async function ensureServerPermission(server) {
-  const origin = new URL(server).origin + '/*';
-  if (await chrome.permissions.contains({ origins: [origin] })) return true;
-  return chrome.permissions.request({ origins: [origin] });
 }
 
 // --- runs inside the page. Must be self-contained.
@@ -245,24 +240,19 @@ async function loginScreen(msg, keep) {
   const s = await store.get();
   const email = el('input', { type: 'email', autocomplete: 'email', value: s.email });
   const pass = el('input', { type: 'password', autocomplete: 'current-password' });
-  const server = el('input', { type: 'text', value: s.server });
   const err = el('div', { class: 'err', style: msg ? '' : 'display:none' }, msg || '');
   const btn = el('button', { class: 'btn primary', type: 'submit' }, 'Sign in');
   const form = el('form', { onsubmit: async (e) => {
     e.preventDefault(); btn.disabled = true; err.style.display = 'none';
     try {
-      const url = server.value.trim().replace(/\/$/, '');
-      new URL(url);
-      if (!(await ensureServerPermission(url))) throw new Error('Permission to reach that server was not granted.');
-      await store.set({ server: url });
       const r = await callApi('/api/auth/login', { method: 'POST', body: { email: email.value, password: pass.value } });
       await store.set({ token: r.token, email: r.user.email });
       await home();
     } catch (x) { err.textContent = x.message; err.style.display = ''; btn.disabled = false; }
   } },
-    el('label', {}, 'Email (same as the dashboard)', email), el('label', {}, 'Password', pass), el('label', {}, 'Server', server),
+    el('label', {}, 'Email (same as the dashboard)', email), el('label', {}, 'Password', pass),
     err, btn,
-    el('button', { class: 'btn link', type: 'button', onclick: async () => chrome.tabs.create({ url: server.value.trim().replace(/\/$/, '') + '/' }) }, 'No account yet? Sign up on the dashboard'));
+    el('button', { class: 'btn link', type: 'button', onclick: async () => chrome.tabs.create({ url: DEFAULT_SERVER + '/' }) }, 'No account yet? Sign up on the dashboard'));
   show(el('h1', { style: 'margin-top:10px' }, 'Sign in'), form);
 }
 

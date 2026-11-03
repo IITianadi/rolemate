@@ -17,9 +17,9 @@ const faqItems = (c) => [
   ['Does it invent experience or skills?', 'No. It only reorders, highlights numbers and adds a skill you have confirmed yourself. Nothing is written into your resume that you have not approved.'],
   ['Which job sites does the extension work on?', 'Any page with a job description, including LinkedIn jobs and hiring posts, Naukri and company career pages, because it reads the text on the page you have open. You can also paste a description straight into the dashboard.'],
   ['Does it guarantee that I will pass an ATS or get shortlisted?', 'No tool can promise that. The match score compares your resume with the job description. It tells you which required skills your resume does and does not mention. How a recruiter or a company\'s system ranks you is outside our control.'],
-  ['What does the AI do, and what happens without it?', 'With AI on, it researches the company with sources, writes a brief and drafts an answer to each likely question from your resume. Without AI, the match score, tailoring, tracking and a rule-based prep all still work.'],
+  ['What does the AI do, and what happens without it?', 'AI reads the job posting, helps write your interview prep and answers your questions in Ask AI. The match score and tailoring follow fixed rules, so they never add anything to your resume that is not already there.'],
   ['What happens to my resume and data?', 'Your resume and jobs are stored against your account so the dashboard can show them. You can export everything or delete your account from Settings. See the privacy policy for details.'],
-  ['What does it cost?', 'The free plan includes 10 tailored resumes a month. The paid plan is planned at ₹299 a month, with a 3-month option, and prices include GST. Billing is not open yet: join the waitlist and we will tell you first.'],
+  ['What does it cost?', 'Every account starts with 50 free credits. One credit covers one job: saving it, tailoring your resume, interview prep and Ask AI for that job. When they run out you can buy more in packs, for example 100 credits for ₹499. It is a one-time payment, not a subscription, and credits do not expire.'],
 ];
 
 export const PAGES = [
@@ -33,7 +33,7 @@ export const PAGES = [
     <h1>Apply with a resume that <em>fits</em> every&nbsp;job.</h1>
     <p class="lead">Open any job. ${c.B.name} measures it against your resume, then cuts a tailored copy in <span class="chalk">your own layout</span>, with an interview brief for that company. You stay in control and press apply yourself.</p>
     <div class="row"><a class="btn primary" href="#waitlist">Join the waitlist</a>${c.demo ? `<a class="btn" href="${c.demo}" target="_blank" rel="noopener">Try the live demo →</a>` : `<a class="btn" href="${c.u('how-it-works')}">See how it works</a>`}</div>
-    <p class="fine">Free plan: 10 tailored resumes a month. No card needed.</p>
+    <p class="fine">50 free credits to start. No card needed.</p>
   </div>
   <div class="artwrap"><div class="art" role="img" aria-label="A resume and a job description pinned together. A tape measure shows an 86 out of 100 fit, and one missing skill is circled in red.">
     <i class="crop-a"></i><i class="crop-b"></i>
@@ -96,10 +96,10 @@ export const PAGES = [
 <section class="block"><div class="wrap">
   <div class="sechead"><span class="eyebrow">Pricing</span><h2>Start free. Pay when your search gets <em>busy</em>.</h2></div>
   <div class="grid">
-    <div class="card seam plan reveal"><h3>Free</h3><div class="price">₹0</div><p class="muted">For trying it on a few jobs.</p><ul><li>10 tailored resumes a month</li><li>Match score and skill gaps</li><li>Job board and resume editor</li><li>Basic interview prep</li></ul></div>
-    <div class="card seam plan featured reveal"><span class="badge">Planned</span><h3>Pro</h3><div class="price">₹299 <small>/ month</small></div><p class="muted">Or ₹699 for 3 months. Prices include GST.</p><ul><li>Unlimited tailored resumes (fair use)</li><li>AI interview prep with sources</li><li>Ask AI about any job</li></ul><a class="btn on-dark" href="#waitlist">Join the waitlist</a></div>
+    <div class="card seam plan reveal"><h3>Free</h3><div class="price">₹0</div><p class="muted">50 credits to start. One credit is one job.</p><ul><li>Save, match and tailor each job</li><li>Interview prep and Ask AI for each job</li><li>Job board and resume editor</li></ul></div>
+    <div class="card seam plan featured reveal"><span class="badge">Pay as you go</span><h3>Credit packs</h3><div class="price">₹499 <small>/ 100 credits</small></div><p class="muted">Also 30 credits for ₹199 and 300 for ₹1,299. One-time payment, no subscription, credits never expire.</p><ul><li>Same features as Free</li><li>Pay only for the jobs you apply to</li></ul><a class="btn on-dark" href="#waitlist">Join the waitlist</a></div>
   </div>
-  <p style="margin-top:22px"><a href="${c.u('pricing')}">Compare plans in full →</a></p>
+  <p style="margin-top:22px"><a href="${c.u('pricing')}">See pricing in full →</a></p>
 </div></section>
 <section class="block paper"><div class="wrap narrow">
   <div class="sechead"><span class="eyebrow">Free tool</span><h2>Check your resume against a job <em>right now</em></h2><p>Paste both and see which required skills your resume mentions. It runs in your browser: nothing you paste is uploaded.</p></div>
@@ -129,29 +129,21 @@ export const PAGES = [
 </div></div>`,
   },
   {
-    slug: 'pricing', nav: 'Pricing', title: () => 'Pricing: free plan and Pro from ₹299 a month', desc: 'Start free with 10 tailored resumes a month. Pro adds unlimited tailoring and AI interview prep. Prices include GST. Billing opens soon.',
+    slug: 'pricing', nav: 'Pricing', title: () => 'Pricing: 50 free credits, then pay as you go', desc: 'Start with 50 free credits. One credit covers one job. Buy more in packs from ₹199. One-time payment, no subscription.',
     body: (c) => `
 <div class="wrap" style="padding-bottom:100px">
-  <div class="pagehead"><h1>Simple <em>pricing</em></h1><p class="lead">Start free. Upgrade when your search gets busy. Prices are in rupees and include GST.</p></div>
+  <div class="pagehead"><h1>Simple <em>pricing</em></h1><p class="lead">Start free with 50 credits. One credit covers one job. Pay only when you need more. Prices are in rupees and include GST.</p></div>
   <div class="grid">
-    <div class="card seam plan"><h3>Free</h3><div class="price">₹0</div><p class="muted">For trying it on a few jobs.</p><ul class="prose"><li>10 tailored resumes a month</li><li>Match score and skill gaps</li><li>Job board and notes</li><li>Resume editor and PDF</li><li>Basic interview prep</li></ul></div>
-    <div class="card seam plan featured"><span class="badge">Planned</span><h3>Pro</h3><div class="price">₹299 <small>/ month</small></div><p class="muted">Or ₹699 for 3 months, since most searches run 2 to 4 months.</p><ul class="prose"><li>Everything in Free</li><li>Unlimited tailored resumes (fair use)</li><li>AI interview prep with company research and sources</li><li>Ask AI about any job</li></ul>
-      <a class="btn primary" href="${c.u('index')}#waitlist">Join the waitlist</a></div>
+    <div class="card seam plan"><h3>Free</h3><div class="price">₹0</div><p class="muted">50 credits when you sign up.</p><ul class="prose"><li>Match score and skill gaps</li><li>Tailored resume in your own layout</li><li>Interview prep and Ask AI for each job</li><li>Job board, notes, resume editor and PDF</li></ul><a class="btn primary" href="${c.u('index')}#waitlist">Get started</a></div>
+    <div class="card seam plan featured"><span class="badge">Best value</span><h3>100 credits</h3><div class="price">₹499</div><p class="muted">₹5 per job. One-time payment.</p><ul class="prose"><li>Everything in Free</li><li>Credits never expire</li><li>No subscription, nothing to cancel</li></ul></div>
+    <div class="card seam plan"><h3>30 credits</h3><div class="price">₹199</div><p class="muted">₹6.6 per job. For a short search.</p></div>
+    <div class="card seam plan"><h3>300 credits</h3><div class="price">₹1,299</div><p class="muted">₹4.3 per job. For a long, busy search.</p></div>
   </div>
-  <div class="callout warn" style="margin-top:28px">Billing is not open yet. These are the planned prices. Waitlist members hear first, and we will not charge anyone without clear notice and their consent. Cancellation and refunds will follow the <a href="${c.u('refund')}">refund policy</a>.</div>
-  <h2 style="margin-top:56px;margin-bottom:16px">Compare plans</h2>
-  <div class="tablewrap"><table><thead><tr><th>Feature</th><th>Free</th><th>Pro</th></tr></thead><tbody>
-    <tr><td>Tailored resumes</td><td>10 / month</td><td>Unlimited, fair use</td></tr>
-    <tr><td>Match score and skill gaps</td><td>${check}</td><td>${check}</td></tr>
-    <tr><td>Job board, notes, resume editor</td><td>${check}</td><td>${check}</td></tr>
-    <tr><td>Chrome extension</td><td>${check}</td><td>${check}</td></tr>
-    <tr><td>Interview prep</td><td>Basic</td><td>AI, with sources</td></tr>
-    <tr><td>Ask AI about a job</td><td>${dash}</td><td>${check}</td></tr>
-  </tbody></table></div>
   <h2 style="margin-top:56px;margin-bottom:8px">Questions about pricing</h2>
-  <details><summary>Do I need a card for the free plan?</summary><p>No.</p></details>
-  <details><summary>Why is there a monthly limit on the free plan?</summary><p>Each tailored resume uses real computing resources. A limit keeps the free plan sustainable for everyone.</p></details>
-  <details><summary>Will the price change?</summary><p>These are the prices we plan to launch with. If they change before launch, the waitlist is told first.</p></details>
+  <details><summary>What is a credit?</summary><p>One credit is one job. It covers saving the job, the match score, your tailored resume, interview prep and Ask AI for that job. Tailoring the same job again does not use another credit.</p></details>
+  <details><summary>Do I need a card for the free credits?</summary><p>No.</p></details>
+  <details><summary>Do credits expire?</summary><p>No. Buy a pack once and use it at your own pace.</p></details>
+  <details><summary>Is it a subscription?</summary><p>No. Each pack is a single payment. Nothing renews. See the <a href="${c.u('refund')}">refund policy</a>.</p></details>
 </div>`,
   },
   {
@@ -201,33 +193,30 @@ export const PAGES = [
   <h2>Grievance officer</h2><p>For privacy or data complaints: <a href="mailto:${c.B.grievanceEmail}">${c.B.grievanceEmail}</a>. Registered address: ${c.B.address}.</p></div></div>`,
   },
   {
-    slug: 'privacy', nav: false, legal: true, title: (B) => `Privacy policy | ${B.name}`, desc: 'What data we collect, why, how long we keep it and how to export or delete it. Draft pending legal review.',
+    slug: 'privacy', nav: false, legal: true, title: (B) => `Privacy policy | ${B.name}`, desc: 'What data Rolemate collects, why, who processes it, how long we keep it and how to export or delete it.',
     body: (c) => `<div class="wrap narrow"><div class="pagehead"><h1>Privacy policy</h1></div><div class="prose" style="padding-bottom:100px">
-  <div class="callout warn"><strong>Draft.</strong> This text is a starting point for your lawyer. It must be reviewed against the Digital Personal Data Protection Act, 2023 and the current rules before launch.</div>
-  <p class="muted">Last updated: [date]. Operator: ${c.B.legalName}, ${c.B.address}.</p>
-  <h2>What we collect</h2><ul><li><strong>Account:</strong> your email address and a hashed password.</li><li><strong>Your resume and profile:</strong> the file you upload and the details read from it.</li><li><strong>Jobs you capture:</strong> the text of the page you chose to capture, its address, and your notes and status.</li><li><strong>Usage:</strong> counts needed to apply plan limits, and basic error logs.</li></ul>
-  <h2>Why</h2><p>To provide the service you asked for: matching, tailoring, tracking and prep. We do not sell your data and we do not show advertising.</p>
-  <h2>The extension</h2><p>It reads a page only when you click it, and only sends the text you capture to your own account.</p>
-  <h2>AI processing</h2><p>When AI features are on, the relevant parts of your resume and the job description are sent to our AI provider to produce your prep. [Name the provider, its location and its retention terms here after review.]</p>
-  <h2>Retention, export and deletion</h2><p>You can export everything and delete your account from Settings. Deletion removes your profile, resumes and jobs. [State backup retention here.]</p>
-  <h2>Your rights and complaints</h2><p>Write to <a href="mailto:${c.B.grievanceEmail}">${c.B.grievanceEmail}</a>. [Add response time and the Data Protection Board route after review.]</p></div></div>`,
+  <p class="muted">Last updated: 3 November 2026. Operator: ${c.B.legalName}, ${c.B.address}.</p>
+  <h2>What we collect</h2><ul><li><strong>Account:</strong> your email address and a hashed password.</li><li><strong>Your resume and profile:</strong> the file you upload and the details read from it.</li><li><strong>Jobs you capture:</strong> the text, address, title, company and logo of the page you chose to capture, plus your notes and status.</li><li><strong>Payments:</strong> the payment reference, pack and amount. We never see or store your card, UPI or bank details. Razorpay handles those.</li><li><strong>Usage:</strong> counts needed to apply credit limits, and basic error logs.</li></ul>
+  <h2>Why we use it</h2><p>To provide the service you asked for: matching, tailoring, tracking, interview prep and payments. We do not sell your data and we do not show advertising.</p>
+  <h2>The Chrome extension</h2><p>The extension reads a page only when you click it, using Chrome's activeTab permission. It sends the text, address, title and company logo of that page to your Rolemate account, and nothing else. It does not read your browsing history, run in the background or track you. It stores only your sign-in token on your device.</p>
+  <h2>Who processes your data</h2><p>We use these service providers to run Rolemate. They process data only to provide their service to us.</p><ul><li><strong>Anthropic</strong> (AI provider): receives the job text, and the parts of your resume needed for matching help, interview prep and Ask AI, to produce your results.</li><li><strong>Razorpay</strong>: processes payments.</li><li><strong>Brandfetch</strong>: receives only a company name, to find its logo.</li><li><strong>Railway and Cloudflare</strong>: host the application and the website.</li></ul>
+  <h2>Retention, export and deletion</h2><p>You can export everything and delete your account from Settings. Deletion removes your profile, resumes and jobs from our systems. Payment records may be kept as long as the law requires for tax and accounting.</p>
+  <h2>Your rights and complaints</h2><p>You can ask us to access, correct or erase your data, or to withdraw consent. Write to <a href="mailto:${c.B.grievanceEmail}">${c.B.grievanceEmail}</a>. We will respond within 30 days. If you are not satisfied, you may complain to the Data Protection Board of India.</p></div></div>`,
   },
   {
     slug: 'terms', nav: false, legal: true, title: (B) => `Terms of service | ${B.name}`, desc: 'The terms for using the service. Draft pending legal review.',
     body: (c) => `<div class="wrap narrow"><div class="pagehead"><h1>Terms of service</h1></div><div class="prose" style="padding-bottom:100px">
-  <div class="callout warn"><strong>Draft.</strong> Have a lawyer review and complete this before launch.</div>
   <h2>The service</h2><p>${c.B.name} helps you tailor resumes, track applications and prepare for interviews. It does not apply to jobs for you and does not guarantee interviews, offers or any outcome.</p>
   <h2>Your content</h2><p>You own your resume and data. You confirm that everything in your resume is true and that you have the right to upload it. You are responsible for what you send to employers.</p>
   <h2>Acceptable use</h2><p>No automated bulk use, no attempts to bypass limits, and no use against the terms of the job sites you visit.</p>
-  <h2>Plans and payment</h2><p>Paid plans renew until cancelled. Prices include GST. See the <a href="${c.u('refund')}">refund and cancellation policy</a>.</p>
+  <h2>Credits and payment</h2><p>Each account starts with free credits. One credit covers one job. You can buy more credits in packs, as a one-time payment. Credits do not expire and nothing renews automatically. Prices include GST. See the <a href="${c.u('refund')}">refund policy</a>.</p>
   <h2>Liability</h2><p>[Limitation of liability, governing law and jurisdiction to be completed by counsel.]</p></div></div>`,
   },
   {
-    slug: 'refund', nav: false, legal: true, title: (B) => `Refund and cancellation | ${B.name}`, desc: 'How to cancel a paid plan and when refunds are given. Draft pending legal review.',
-    body: (c) => `<div class="wrap narrow"><div class="pagehead"><h1>Refund and cancellation</h1></div><div class="prose" style="padding-bottom:100px">
-  <div class="callout warn"><strong>Draft.</strong> Payment providers require this page. Decide the policy, then have it reviewed.</div>
-  <h2>Cancel any time</h2><p>Cancel from Settings. Your plan stays active until the end of the period you paid for and does not renew.</p>
-  <h2>Refunds</h2><p>[State the refund window, for example a full refund within 7 days of the first payment if you have not used the paid features, and the process and timeline for refunds to the original payment method.]</p>
+    slug: 'refund', nav: false, legal: true, title: (B) => `Refund policy | ${B.name}`, desc: 'Credit packs are one-time payments with nothing to cancel. Here is when a pack can be refunded and how long it takes.',
+    body: (c) => `<div class="wrap narrow"><div class="pagehead"><h1>Refund policy</h1></div><div class="prose" style="padding-bottom:100px">
+  <h2>No subscription to cancel</h2><p>Credit packs are one-time payments. Nothing renews, so there is nothing to cancel.</p>
+  <h2>Refunds</h2><p>If you have not used any credits from a pack, you can ask for a full refund within 7 days of paying. Credits that have been used are not refundable. If you were charged but did not receive your credits, write to us and we will fix it or refund you. Refunds go back to the original payment method, usually within 5 to 7 working days.</p>
   <h2>Contact</h2><p><a href="mailto:${c.B.supportEmail}">${c.B.supportEmail}</a></p></div></div>`,
   },
 ];

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rolemate",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Capture a job page, see how well your resume matches, and get a tailored resume PDF.",
   "action": {
     "default_popup": "popup.html",
@@ -14,10 +14,6 @@
   ],
   "host_permissions": [
     "https://app.rolemate.in/*"
-  ],
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
   ],
   "icons": {
     "16": "icons/16.png",

@@ -14,7 +14,8 @@
     "site:build": "node site/build.mjs",
     "site:cf": "node site/build.mjs && cp site/onepage/index.html site/dist/index.html",
     "site:deploy": "npm run site:cf && wrangler deploy",
-    "e2e:site": "node --no-warnings test/e2e/site.mjs"
+    "e2e:site": "node --no-warnings test/e2e/site.mjs",
+    "ext:zip": "rm -f rolemate-extension.zip && cd extension && zip -r -X ../rolemate-extension.zip . -x '.DS_Store' && cd .. && echo Built rolemate-extension.zip"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
