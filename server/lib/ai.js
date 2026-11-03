@@ -9,7 +9,7 @@ let lastError = null;
 
 export const setClientForTests = (c) => { testClient = c; lastError = null; };
 export const aiEnabled = () => !!testClient || !!process.env.ANTHROPIC_API_KEY;
-export const aiModel = () => process.env.TAILORKIT_MODEL || 'claude-opus-5-5';
+export const aiModel = () => process.env.TAILORKIT_MODEL || 'claude-haiku-5-5';
 export const aiLastError = () => lastError;
 const api = () => testClient || (client ??= new Anthropic());
 
@@ -19,7 +19,7 @@ function noteError(e) {
   console.warn('[ai]', lastError.message);
 }
 
-// Opus 5.5: thinking is always on and sampling params are not accepted, so only effort is set.
+// Default model is Haiku 5.5 (about 1/40 the price of Opus). Sampling params are not accepted, so only effort is set.
 // The server-side refusal fallback is opted into by default; if the account rejects it (400), retry without.
 async function createMessage(params) {
   const c = api();
@@ -59,6 +59,10 @@ export async function askJSON(system, user, { maxTokens = 4000, effort = 'low' }
 // Returns the final text plus the sources that were actually retrieved/cited (not model-claimed).
 export async function researchWeb({ system, user, maxUses = 8, maxTokens = 8000 }) {
   if (!aiEnabled()) return null;
+  // Live web research is the one expensive step (searches are billed per use and results are read as input).
+  // It stays off until you choose a model for it, e.g. TAILORKIT_RESEARCH_MODEL=claude-sonnet-5-5.
+  const researchModel = process.env.TAILORKIT_RESEARCH_MODEL;
+  if (!researchModel && !testClient) return null;
   const messages = [{ role: 'user', content: user }];
   const sources = new Map();
   const collect = (content) => {
@@ -77,7 +81,7 @@ export async function researchWeb({ system, user, maxUses = 8, maxTokens = 8000 
     let res;
     for (let i = 0; i < 6; i++) {
       res = await createMessage({
-        model: aiModel(), max_tokens: maxTokens, output_config: { effort: 'medium' }, system, messages,
+        model: researchModel || aiModel(), max_tokens: maxTokens, output_config: { effort: 'medium' }, system, messages,
         tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: maxUses }],
       });
       collect(res.content);

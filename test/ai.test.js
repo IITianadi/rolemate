@@ -29,14 +29,14 @@ function fake(handlers = {}) {
 
 after(async () => { setClientForTests(null); await closeBrowser(); });
 
-test('askJSON: Opus 5.5 request shape (no sampling params, no thinking config), fences, parses JSON', async () => {
+test('askJSON: default-model request shape (no sampling params, no thinking config), fences, parses JSON', async () => {
   const c = fake({ beta: () => ({ stop_reason: 'end_turn', content: [text('Sure!\n{"title":"PM","mustHave":["SQL"]}')] }) });
   setClientForTests(c);
   assert.equal(aiEnabled(), true);
   const out = await askJSON('sys', 'user text');
   assert.deepEqual(out, { title: 'PM', mustHave: ['SQL'] });
   const p = c.calls[0].p;
-  assert.equal(p.model, 'claude-opus-5-5');
+  assert.equal(p.model, 'claude-haiku-5-5');
   for (const banned of ['temperature', 'top_p', 'top_k', 'thinking']) assert.ok(!(banned in p), `${banned} must not be sent`);
   assert.equal(p.output_config.effort, 'low');
   assert.deepEqual(p.betas, ['server-side-fallback-2026-07-01']);
