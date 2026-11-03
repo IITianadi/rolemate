@@ -264,3 +264,12 @@ test('capture stores the company logo and posting URL; unsafe logos are ignored'
   r = await cap('https://jobs.example/acme/3', { logo: 'http://insecure.example/a.png' });
   assert.equal(r.data.job.logo, '', 'http logos are not stored');
 });
+
+test('logo lookup guesses company domains and only keeps names that resolve', async () => {
+  const { domainGuesses, findCompanyDomain } = await import('../server/lib/logo.js');
+  assert.ok(domainGuesses('Acme Payments Pvt. Ltd.').includes('acmepayments.com'));
+  const seen = [];
+  const d = await findCompanyDomain('Razorpay Software Pvt Ltd', async (x) => { seen.push(x); if (x !== 'razorpay.com') throw new Error('nx'); return {}; });
+  assert.equal(d, 'razorpay.com');
+  assert.equal(await findCompanyDomain('Nope Co', async () => { throw new Error('nx'); }), '');
+});
