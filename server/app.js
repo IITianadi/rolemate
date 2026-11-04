@@ -16,7 +16,10 @@ import { getCompanyResearch } from './lib/research.js';
 import { buildPrep, chatSystem } from './lib/prep.js';
 import { PACKS, packById, publicPacks, billingConfig, billingEnabled, verifySignature, createPaymentLink } from './lib/billing.js';
 import { findCompanyLogo } from './lib/logo.js';
-import { createHash } from 'node:crypto';
+import { createMailer } from './lib/mail.js';
+import { welcomeEmail, guideEmail, resetEmail } from './lib/mail-templates.js';
+import { verifyGoogleToken } from './lib/google.js';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 export const STATUSES = ['saved', 'applied', 'screening', 'interview', 'offer', 'rejected'];
@@ -54,8 +57,10 @@ function sseStart(res) {
   return (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
 }
 
-export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_LIMIT || 50), billing = {} } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_LIMIT || 50), billing = {}, mailer = createMailer(), googleVerify = verifyGoogleToken, codeMax = 8 } = {}) {
   const bill = billingConfig(billing);
+  const appUrl = bill.publicUrl;
+  const siteUrl = (process.env.SITE_URL || 'https://rolemate.in').replace(/\/$/, '');
   const db = openDb(dbPath);
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -63,6 +68,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { if (req.originalUrl === '/api/billing/webhook') req.rawBody = buf; } }));
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
   const authLimit = rateLimiter({ max: 15 });
+  const codeLimit = rateLimiter({ max: codeMax }); // reset requests and connect-code guesses
 
   // --- CORS: the dashboard is same-origin; the Chrome extension calls with a bearer token (no cookies).
   app.use((req, res, next) => {
@@ -167,6 +173,29 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   });
 
   // ---------- auth
+  const sha = (v) => createHash('sha256').update(v).digest('hex');
+  // One-time tokens (password reset, extension connect code): only a hash is stored, each works once, each expires.
+  const issueToken = (userId, kind, ttlMs, make) => {
+    const raw = make();
+    db.prepare('DELETE FROM one_time_tokens WHERE expires_at < ?').run(Date.now());
+    db.prepare('INSERT INTO one_time_tokens (token_hash, user_id, kind, expires_at) VALUES (?,?,?,?)').run(sha(raw), userId, kind, Date.now() + ttlMs);
+    return raw;
+  };
+  const useToken = (raw, kind) => {
+    const row = db.prepare('SELECT * FROM one_time_tokens WHERE token_hash = ? AND kind = ?').get(sha(String(raw || '')), kind);
+    if (!row) return null;
+    db.prepare('DELETE FROM one_time_tokens WHERE token_hash = ?').run(row.token_hash);
+    return row.expires_at < Date.now() ? null : row.user_id;
+  };
+  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const makeCode = () => Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
+  const sendWelcome = (to) => {
+    mailer.send({ to, ...welcomeEmail({ appUrl }) });
+    mailer.send({ to, ...guideEmail({ appUrl, siteUrl }), sendAt: Date.now() + 5 * 60_000 });
+  };
+
+  app.get('/api/config', (_req, res) => res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || '' }));
+
   app.post('/api/auth/signup', authLimit, (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
@@ -175,14 +204,78 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw httpError(409, 'An account with this email already exists. Sign in instead.');
     const { salt, hash } = hashPassword(password);
     const info = db.prepare('INSERT INTO users (email, salt, pass_hash) VALUES (?,?,?)').run(email, salt, hash);
+    sendWelcome(email);
     res.status(201).json({ token: createSession(db, Number(info.lastInsertRowid)), user: { email, plan: 'free' } });
   });
 
   app.post('/api/auth/login', authLimit, (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const u = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (u && !u.pass_hash) throw httpError(401, 'This account signs in with Google. Use “Continue with Google”, or “Forgot password” to set a password.');
     if (!u || !verifyPassword(String(req.body?.password || ''), u.salt, u.pass_hash)) throw httpError(401, 'Wrong email or password.');
     res.json({ token: createSession(db, u.id), user: { email: u.email, plan: u.plan } });
+  });
+
+  // Google Sign-In: the browser sends Google's signed ID token; we verify it ourselves.
+  app.post('/api/auth/google', authLimit, async (req, res) => {
+    let g;
+    try { g = await googleVerify(String(req.body?.credential || '')); } catch (e) { console.error('[google]', e.message); throw httpError(401, 'Google sign-in did not work. Please try again.'); }
+    let u = db.prepare('SELECT * FROM users WHERE google_id = ?').get(g.sub) || db.prepare('SELECT * FROM users WHERE email = ?').get(g.email);
+    if (u && u.google_id && u.google_id !== g.sub) throw httpError(401, 'This email is linked to a different Google account.');
+    let isNew = false;
+    if (!u) {
+      const info = db.prepare("INSERT INTO users (email, salt, pass_hash, google_id) VALUES (?, '', '', ?)").run(g.email, g.sub);
+      u = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(info.lastInsertRowid));
+      isNew = true; sendWelcome(g.email);
+    } else if (!u.google_id) {
+      // First time this existing account meets Google. Google has verified the mailbox but password sign-ups never were,
+      // so someone else may have registered this address with their own password. Drop that password and any open sessions.
+      db.prepare("UPDATE users SET google_id = ?, salt = '', pass_hash = '' WHERE id = ?").run(g.sub, u.id);
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+    }
+    res.json({ token: createSession(db, u.id), user: { email: u.email, plan: u.plan }, isNew });
+  });
+
+  // Forgot password. The answer is the same whether or not the address has an account.
+  app.post('/api/auth/forgot', codeLimit, (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const u = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? db.prepare('SELECT id FROM users WHERE email = ?').get(email) : null;
+    if (u) {
+      const open = db.prepare("SELECT COUNT(*) n FROM one_time_tokens WHERE user_id = ? AND kind = 'reset' AND expires_at > ?").get(u.id, Date.now()).n;
+      if (open < 3) {
+        const token = issueToken(u.id, 'reset', 3600_000, () => randomBytes(32).toString('hex'));
+        mailer.send({ to: email, ...resetEmail({ url: `${appUrl}/#/reset/${token}` }) });
+      }
+    }
+    res.json({ ok: true });
+  });
+
+  app.post('/api/auth/reset', codeLimit, (req, res) => {
+    const password = String(req.body?.password || '');
+    if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
+    const userId = useToken(req.body?.token, 'reset');
+    if (!userId) throw httpError(400, 'This reset link has expired or was already used. Ask for a new one.');
+    const { salt, hash } = hashPassword(password);
+    db.prepare('UPDATE users SET salt = ?, pass_hash = ? WHERE id = ?').run(salt, hash, userId);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId); // anyone signed in with the old password is signed out
+    db.prepare("DELETE FROM one_time_tokens WHERE user_id = ? AND kind = 'reset'").run(userId);
+    const u = db.prepare('SELECT email, plan FROM users WHERE id = ?').get(userId);
+    res.json({ token: createSession(db, userId), user: { email: u.email, plan: u.plan } });
+  });
+
+  // Connect code: a signed-in dashboard user gets a short one-time code and types it into the extension.
+  app.post('/api/auth/connect-code', auth, codeLimit, (req, res) => {
+    db.prepare("DELETE FROM one_time_tokens WHERE user_id = ? AND kind = 'connect'").run(req.user.id);
+    const code = issueToken(req.user.id, 'connect', 10 * 60_000, makeCode);
+    res.json({ code: `${code.slice(0, 4)}-${code.slice(4)}`, expiresInMinutes: 10 });
+  });
+
+  app.post('/api/auth/connect', codeLimit, (req, res) => {
+    const code = String(req.body?.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const userId = code.length === 8 ? useToken(code, 'connect') : null;
+    if (!userId) throw httpError(400, 'That code is wrong or has expired. Get a new one from the dashboard.');
+    const u = db.prepare('SELECT email, plan FROM users WHERE id = ?').get(userId);
+    res.json({ token: createSession(db, userId), user: { email: u.email, plan: u.plan } });
   });
 
   app.post('/api/auth/logout', auth, (req, res) => { destroySession(db, req.token); res.json({ ok: true }); });
@@ -515,7 +608,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
 
   // ---------- dashboard (static)
   app.use((req, res, next) => {
-    if (!req.path.startsWith('/api')) res.set('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    if (!req.path.startsWith('/api')) res.set('Content-Security-Policy', "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; frame-src https://accounts.google.com/gsi/; connect-src 'self' https://accounts.google.com/gsi/; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     next();
   });
   app.use(express.static(WEB_DIR, { extensions: ['html'] }));

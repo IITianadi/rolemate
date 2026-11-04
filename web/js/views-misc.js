@@ -61,7 +61,13 @@ export async function settingsView(me, go) {
     h('div', { class: 'card' }, h('h2', null, 'Delete account'), h('p', { class: 'muted small' }, 'Permanently deletes your resume, jobs and tailored versions.'),
       h('div', { class: 'row' }, del, h('button', { class: 'btn danger', onclick: async () => { try { await api('/api/account', { method: 'DELETE', body: { confirm: del.value.trim() } }); setToken(''); go('#/login'); } catch (e) { toast(e.message, true); } } }, 'Delete everything'))));
 
-  const extension = () => h('div', { class: 'card' }, h('h2', null, 'Chrome extension'), h('p', { class: 'muted small' }, 'One click on any job page.'), EXT_STEPS());
+  const extension = () => {
+    const out = h('div');
+    const getCode = h('button', { class: 'btn', onclick: async () => { try { const r = await api('/api/auth/connect-code', { method: 'POST' }); out.replaceChildren(h('div', { class: 'codebox' }, r.code), h('p', { class: 'muted small' }, `Type this into the extension\u2019s \u201cSign in with a code\u201d box. It works once and expires in ${r.expiresInMinutes} minutes.`)); } catch (e) { toast(e.message, true); } } }, 'Get a code for the extension');
+    return h('div', { class: 'stack' },
+      h('div', { class: 'card' }, h('h2', null, 'Chrome extension'), h('p', { class: 'muted small' }, 'One click on any job page.'), EXT_STEPS()),
+      h('div', { class: 'card' }, h('h2', null, 'Sign in to the extension with a code'), h('p', { class: 'muted small' }, 'Signed up with Google, or just want to skip typing your password? Get a one-time code here and enter it in the extension.'), getCode, out));
+  };
 
   const billing = () => {
     const q = me.quota; const pct = q.limit ? Math.min(100, Math.round((q.used / q.limit) * 100)) : 0;

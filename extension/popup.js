@@ -253,7 +253,20 @@ async function loginScreen(msg, keep) {
     el('label', {}, 'Email (same as the dashboard)', email), el('label', {}, 'Password', pass),
     err, btn,
     el('button', { class: 'btn link', type: 'button', onclick: async () => chrome.tabs.create({ url: DEFAULT_SERVER + '/' }) }, 'No account yet? Sign up on the dashboard'));
-  show(el('h1', { style: 'margin-top:10px' }, 'Sign in'), form);
+  // Google users have no password: they get a one-time code from Settings in the dashboard.
+  const code = el('input', { type: 'text', autocomplete: 'off', placeholder: 'XXXX-XXXX', maxlength: '9', style: 'text-transform:uppercase' });
+  const cerr = el('div', { class: 'err', style: 'display:none' });
+  const cbtn = el('button', { class: 'btn', type: 'submit' }, 'Sign in with code');
+  const codeForm = el('form', { onsubmit: async (e) => {
+    e.preventDefault(); cbtn.disabled = true; cerr.style.display = 'none';
+    try {
+      const r = await callApi('/api/auth/connect', { method: 'POST', body: { code: code.value } });
+      await store.set({ token: r.token, email: r.user.email });
+      await home();
+    } catch (x) { cerr.textContent = x.message; cerr.style.display = ''; cbtn.disabled = false; }
+  } }, el('label', {}, 'Signed up with Google? Use a code', code), cerr, cbtn,
+  el('button', { class: 'btn link', type: 'button', onclick: async () => chrome.tabs.create({ url: DEFAULT_SERVER + '/#/settings' }) }, 'Get a code in Settings'));
+  show(el('h1', { style: 'margin-top:10px' }, 'Sign in'), form, el('hr'), codeForm);
 }
 
 (async () => {

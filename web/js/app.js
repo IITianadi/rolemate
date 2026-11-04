@@ -48,6 +48,8 @@ function shell(page, main) {
 
 async function route() {
   const hash = location.hash || '#/tracking';
+  const rm = hash.match(/^#\/reset\/([a-f0-9]{64})$/);
+  if (rm) { setToken(''); clear(root); root.append(authView(() => { me = null; go('#/tracking'); }, { mode: 'reset', resetToken: rm[1] })); return; }
   if (!getToken()) { clear(root); root.append(authView(() => { me = null; go('#/tracking'); })); return; }
   if (hash === '#/login') { setToken(''); return route(); }
   try { me = await api('/api/me'); } catch (e) { if (e.status !== 401) toast(e.message, true); return; }

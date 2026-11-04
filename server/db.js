@@ -43,6 +43,10 @@ export function openDb(path = 'data/tailorkit.db') {
     CREATE TABLE IF NOT EXISTS job_prep (
       job_id INTEGER PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE, data TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS one_time_tokens (
+      token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL, expires_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS waitlist (
       email TEXT PRIMARY KEY, source TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -60,6 +64,7 @@ export function openDb(path = 'data/tailorkit.db') {
     );
   `);
   // Added after the first release: a stable identity for "the same job" (see capture).
+  if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'google_id')) db.exec("ALTER TABLE users ADD COLUMN google_id TEXT NOT NULL DEFAULT ''");
   if (!db.prepare('PRAGMA table_info(jobs)').all().some((c) => c.name === 'job_key')) {
     db.exec("ALTER TABLE jobs ADD COLUMN job_key TEXT NOT NULL DEFAULT ''");
   }
