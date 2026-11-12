@@ -21,15 +21,16 @@ export async function resumesView() {
 
 export async function resumeEditorView(id) {
   const [data, me] = await Promise.all([api(`/api/resumes/${id}`), api('/api/me')]);
+  const back = data.jobId ? h('a', { class: 'backlink', href: `#/job/${data.jobId}` }, '← Back to job') : h('a', { class: 'backlink', href: '#/resumes' }, '← All resumes');
+  const intro = data.changes.length > 0 && h('details', { class: 'card changes', style: 'margin:0 0 12px' },
+    h('summary', null, `What we changed for this job (${data.changes.length})`),
+    h('ul', null, data.changes.map((c) => h('li', null, c)), h('li', { class: 'keep' }, '✓ Layout, fonts and sections unchanged')));
   const ed = resumeEditor({
-    resume: data.resume, suggestions: data.suggestions, aiEnabled: me.aiEnabled, title: data.label || 'Tailored resume',
+    resume: data.resume, suggestions: data.suggestions, aiEnabled: me.aiEnabled, title: data.label || 'Tailored resume', autosave: true, back, intro,
     onSave: async (resume, suggestions) => { await api(`/api/resumes/${id}`, { method: 'PUT', body: { resume, suggestions } }); },
-    onDownload: () => download(`/api/resumes/${id}/pdf`, 'resume.pdf').catch((e) => toast(e.message, true)),
+    onDownload: () => download(`/api/resumes/${id}/pdf`, 'resume.pdf').then(() => toast('Downloaded')).catch((e) => toast(e.message, true)),
   });
-  return h('div', null,
-    pageHead(data.label || 'Tailored resume', null, data.jobId ? h('a', { class: 'btn', href: `#/job/${data.jobId}` }, 'Back to job') : h('a', { class: 'btn', href: '#/resumes' }, 'All resumes')),
-    data.changes.length > 0 && h('div', { class: 'info', style: 'margin-bottom:18px' }, h('strong', null, 'Changed: '), data.changes.join(' ')),
-    ed.el);
+  return h('div', null, ed.el);
 }
 
 export async function gapsView() {

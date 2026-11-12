@@ -218,3 +218,10 @@ details.changes { margin-top: 16px; } details.changes summary { cursor: pointer;
 details.changes ul { margin: 10px 0 0; padding-left: 18px; color: var(--ink2); font-size: 14px; line-height: 1.6; } details.changes li.keep { color: var(--good); font-weight: 550; list-style: none; margin-left: -18px; }
 @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } .hero > div { padding: 24px; } .jobhead .acts { margin-left: 0; } .todo { flex-wrap: wrap; } .todo .act { margin-left: 46px; } }
 .layout2 > .card + .card { margin-top: 0; }
+/* resume editor */
+.edtitle { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; } .edtitle strong { font-size: 1.15rem; letter-spacing: -.02em; }
+.backlink { color: var(--muted); font-weight: 550; font-size: 14px; padding: 8px 14px; border-radius: 999px; background: var(--sunken); text-decoration: none !important; } .backlink:hover { color: var(--ink); }
+.sugcard { padding: 20px 22px; } .sugcard[hidden] { display: none; }
+.sug { padding: 14px 16px; } .sug ins { font-size: 14.5px; line-height: 1.5; margin-top: 0; } .sug .was { margin-top: 6px; font-size: 13px; color: var(--muted); line-height: 1.45; } .sug .was del { color: var(--faint); }
+.sugdone { color: var(--good); background: var(--good-bg); padding: 12px 16px; border-radius: 14px; font-weight: 550; font-size: 14px; }
+details.card.changes { padding: 18px 22px; } details.card.changes summary { margin: 0; }

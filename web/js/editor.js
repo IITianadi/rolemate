@@ -6,7 +6,8 @@ import { apiText } from './api.js';
 const uid = () => Math.random().toString(36).slice(2, 10);
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
-export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiEnabled = false, title = '' }) {
+// autosave: save a moment after each edit (tailored resumes). back: a link shown before the title. intro: shown above the suggestions.
+export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiEnabled = false, title = '', autosave = false, back = null, intro = null }) {
   let state = clone(resume);
   let sugs = clone(suggestions);
   const history = [];
@@ -35,10 +36,12 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
     try { frame.srcdoc = await apiText('/api/preview', { method: 'POST', body: { resume: state } }); } catch { /* keep the last preview */ }
   }, 450);
 
+  const autoSave = debounce(() => { if (dirty) save(true); }, 1200);
   function touch(structural) {
-    dirty = true; status.textContent = 'Unsaved changes';
+    dirty = true; status.textContent = autosave ? 'Saving…' : 'Unsaved changes';
     if (structural) { undoBtn.disabled = false; }
     refreshPreview();
+    if (autosave) autoSave();
   }
   function snapshot() { history.push(clone(state)); if (history.length > 40) history.shift(); undoBtn.disabled = false; }
   function undo() { const prev = history.pop(); if (!prev) return; state = prev; undoBtn.disabled = !history.length; renderForm(); renderSugs(); touch(false); }
@@ -130,45 +133,65 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
     return null;
   }
 
+  function accept(sg) {
+    const b = findBullet(sg.itemId, sg.bulletId);
+    if (!b) { sg.status = 'rejected'; return false; }
+    b.text = sg.proposed; sg.status = 'accepted'; return true;
+  }
   function renderSugs() {
     clear(sugHost);
-    const pending = sugs.filter((s) => s.status === 'pending');
-    if (!suggestions.length && !sugs.length) {
-      sugHost.append(h('p', { class: 'muted small' }, 'No rewording suggestions for this job. Your bullets were reordered by relevance.'));
+    const pending = sugs.filter((x) => x.status === 'pending');
+    sugHost.parentElement?.toggleAttribute('hidden', !sugs.length && !autosave);
+    if (!sugs.length) {
+      sugHost.append(h('p', { class: 'muted small', style: 'margin:0 0 6px' }, 'No rewording suggestions for this job. Your bullets were reordered by relevance.'));
       return;
     }
-    sugHost.append(h('h3', null, `Suggested rewordings (${pending.length})`));
-    sugHost.append(h('p', { class: 'muted small' }, 'These reuse the job’s wording for work you already described. Numbers are never changed. Accept only what is true.'));
-    for (const s of pending) {
+    if (!pending.length) {
+      const n = sugs.filter((x) => x.status === 'accepted').length;
+      sugHost.append(h('div', { class: 'sugdone' }, `✓ All suggestions reviewed. ${n ? `${n} accepted.` : 'You kept your original wording.'}`));
+      return;
+    }
+    sugHost.append(h('div', { class: 'row between', style: 'margin-bottom:4px' },
+      h('div', null, h('h3', { style: 'margin:0' }, 'Suggested rewordings'), h('div', { class: 'muted small' }, `${pending.length} to review. Same facts and numbers, closer to the job’s wording. Accept only what’s true.`)),
+      pending.length > 1 && h('button', { class: 'btn sm', onclick: () => { snapshot(); const miss = pending.filter((x) => !accept(x)).length; if (miss) toast(`${miss} bullet${miss === 1 ? '' : 's'} no longer exist${miss === 1 ? 's' : ''}, skipped.`, true); renderForm(); renderSugs(); touch(true); } }, 'Accept all')));
+    for (const sg of pending) {
       sugHost.append(h('div', { class: 'sug' },
-        h('del', null, s.original), h('ins', null, s.proposed),
-        s.reason && h('div', { class: 'muted small', style: 'margin-top:4px' }, s.reason),
-        h('div', { class: 'row', style: 'margin-top:8px' },
+        h('ins', null, sg.proposed),
+        h('div', { class: 'was' }, h('span', null, 'Was: '), h('del', null, sg.original)),
+        sg.reason && h('div', { class: 'muted small', style: 'margin-top:6px' }, sg.reason),
+        h('div', { class: 'row', style: 'margin-top:10px;gap:6px' },
           h('button', { class: 'btn sm primary', onclick: () => {
-            const b = findBullet(s.itemId, s.bulletId);
-            if (!b) { toast('That bullet no longer exists.', true); s.status = 'rejected'; renderSugs(); return; }
-            snapshot(); b.text = s.proposed; s.status = 'accepted'; renderForm(); renderSugs(); touch(true);
+            snapshot();
+            if (!accept(sg)) toast('That bullet no longer exists.', true);
+            renderForm(); renderSugs(); touch(true);
           } }, 'Accept'),
-          h('button', { class: 'btn sm', onclick: () => { s.status = 'rejected'; renderSugs(); touch(false); } }, 'Reject'))));
+          h('button', { class: 'btn sm ghost', onclick: () => { sg.status = 'rejected'; renderSugs(); touch(false); } }, 'Keep mine'))));
     }
   }
 
-  async function save() {
+  async function save(quiet) {
     status.textContent = 'Saving…';
-    try { await onSave(state, sugs); dirty = false; status.textContent = 'Saved'; toast('Saved'); return true; }
+    try { await onSave(state, sugs); dirty = false; status.textContent = autosave ? 'All changes saved' : 'Saved'; if (!quiet) toast('Saved'); return true; }
     catch (e) { status.textContent = 'Not saved'; toast(e.message, true); return false; }
   }
 
   root.append(
     h('div', { class: 'sticky-actions row between' },
-      h('div', { class: 'row' }, title && h('strong', null, title), status),
+      h('div', { class: 'edtitle' }, back, title && h('strong', null, title), status),
       h('div', { class: 'row' }, undoBtn,
-        h('button', { class: 'btn', onclick: save }, 'Save'),
-        onDownload && h('button', { class: 'btn primary', onclick: async () => { if (dirty && !(await save())) return; await onDownload(); } }, 'Download PDF'))),
+        !autosave && h('button', { class: 'btn', onclick: () => save() }, 'Save'),
+        onDownload && h('button', { class: 'btn primary', onclick: async () => { if (dirty && !(await save(true))) return; await onDownload(); } }, 'Download PDF'))),
     h('div', { class: 'editor' },
-      h('div', null, sugHost, formHost),
+      h('div', null, intro, h('div', { class: 'card sugcard' }, sugHost), formHost),
       h('div', { class: 'preview' }, h('div', { class: 'phead' }, h('b', null, 'Live preview'), h('span', { class: 'muted small' }, 'Exactly what the PDF will look like')), pane)));
 
   renderForm(); renderSugs(); refreshPreview(); queueMicrotask(fit);
+  sugHost.parentElement.hidden = !sugs.length && !autosave;
+  if (autosave) {
+    // Leaving the page before the autosave fires: save right away so the last edit is not lost.
+    const flush = () => { if (dirty) save(true); };
+    window.addEventListener('hashchange', flush, { once: true });
+    window.addEventListener('beforeunload', (e) => { if (dirty) { flush(); e.preventDefault(); } });
+  }
   return { el: root, isDirty: () => dirty };
 }
