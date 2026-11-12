@@ -45,12 +45,59 @@ function suggestion(jobs, open) {
   return nextStep({ label: 'Next', title: 'Add your next job', sub: 'Paste a description or use the extension', actions: [h('button', { class: 'btn primary', onclick: open }, 'Add job')] });
 }
 
+// First-run checklist: five steps from "resume uploaded" to "first application". Progress comes from real data
+// (jobs, downloads, stages); only "extension installed" and "skip" are remembered in this browser.
+const userKey = (me, k) => `rm_${k}_${me.user.email}`;
+function checklist(me, jobs, go) {
+  const firstWithResume = jobs.find((j) => j.resumes.length);
+  const steps = [
+    { title: 'Upload your resume', sub: 'Done. Every tailored version keeps its layout.', done: true },
+    { title: 'Install the Chrome extension', sub: 'Save jobs from LinkedIn, Naukri and company pages in one click. Pin it so it’s always there.',
+      done: store.get(userKey(me, 'ext'), '') === '1' || jobs.some((j) => j.source && j.source !== 'pasted'),
+      act: (now) => [h('a', { class: `btn ${now ? 'primary' : 'sm'}`, href: '#/settings/extension' }, 'Install extension'),
+        h('button', { class: 'btn ghost sm', onclick: () => { store.set(userKey(me, 'ext'), '1'); go('#/tracking'); } }, 'I’ve installed it')] },
+    { title: 'Capture your first job', sub: 'Open any job and click the extension. Or paste the description here.', done: jobs.length > 0,
+      act: (now) => [h('button', { class: `btn ${now ? 'primary' : 'sm'}`, onclick: toggleAdd }, 'Paste a job')] },
+    { title: 'Download your tailored resume', sub: 'It’s ready seconds after you capture a job.', done: jobs.some((j) => j.status !== 'saved' || j.resumes.some((r) => r.downloaded)),
+      act: (now) => firstWithResume ? [h('a', { class: `btn ${now ? 'primary' : 'sm'}`, href: `#/job/${firstWithResume.id}` }, 'Open your resume')] : [] },
+    { title: 'Mark your first application', sub: 'Applied? Tell us, and your tracker stays honest.', done: jobs.some((j) => j.status !== 'saved'),
+      act: (now) => jobs[0] ? [h('a', { class: `btn ${now ? 'primary' : 'sm'}`, href: `#/job/${(firstWithResume || jobs[0]).id}` }, 'Open job')] : [] },
+  ];
+  const doneN = steps.filter((s) => s.done).length;
+  const nowAt = steps.findIndex((s) => !s.done);
+  if (nowAt === -1) {
+    if (store.get(userKey(me, 'setup'), '') === '1') return null;
+    store.set(userKey(me, 'setup'), '1'); // celebrate once, then the normal board takes over
+    return h('div', { class: 'reward-line' }, '🎉 You’re set up: 5 of 5 done. From here, every job you capture gets its own tailored resume.');
+  }
+  if (store.get(userKey(me, 'skip'), '') === '1') return null;
+  return h('div', { class: 'card onboard', style: 'margin-bottom:26px' },
+    h('div', { class: 'row between' }, h('h2', { style: 'margin:0' }, 'Your progress'), h('span', { class: 'muted small' }, h('b', null, `${doneN} of ${steps.length}`), ' done')),
+    h('div', { class: 'progress-track' }, h('i', { style: `width:${Math.round((doneN / steps.length) * 100)}%` })),
+    h('div', { style: 'margin-top:10px' }, steps.map((s, i) => h('div', { class: `todo ${s.done ? 'done' : i === nowAt ? 'now' : 'later'}` },
+      h('span', { class: 'dot' }, s.done ? '✓' : String(i + 1)),
+      h('div', { class: 'grow' }, h('h3', null, s.title), !s.done && h('div', { class: 'muted small' }, s.sub)),
+      !s.done && s.act && h('div', { class: 'act' }, s.act(i === nowAt))))),
+    h('p', { class: 'small muted', style: 'text-align:center;margin:14px 0 0' }, 'Prefer to look around first? ',
+      h('a', { href: '#', onclick: (e) => { e.preventDefault(); store.set(userKey(me, 'skip'), '1'); go('#/tracking'); } }, 'Hide this checklist')));
+}
+
 export async function trackingView(me, go) {
   const { jobs, statuses } = await api('/api/jobs');
   const host = h('div');
+  const credits = me.quota?.remaining;
   if (!jobs.length) {
-    host.append(pageHead('Jobs'), addJobPanel(go),
-      emptyState(icon('board', 22), 'Add your first job', 'Paste a job description or use the extension.', h('button', { class: 'btn primary lg', onclick: toggleAdd }, 'Paste a job')));
+    const list = checklist(me, jobs, go);
+    if (list) {
+      host.append(h('div', { style: 'max-width:820px;margin:0 auto' },
+        h('h1', { style: 'font-size:clamp(2rem,4vw,2.6rem)' }, 'Welcome. Let’s get your first tailored resume.'),
+        h('p', { class: 'muted', style: 'font-size:1.1rem;margin:12px 0 22px;font-weight:300' }, 'A few quick steps. About 3 minutes.'),
+        credits != null && h('div', { class: 'reward-line' }, '🎁 You have ', h('b', null, `${credits} free credit${credits === 1 ? '' : 's'}`), '. One credit covers one job, from saving it to interview prep.'),
+        addJobPanel(go), list));
+    } else {
+      host.append(pageHead('Jobs'), addJobPanel(go),
+        emptyState(icon('board', 22), 'Add your first job', 'Paste a job description or use the extension.', h('button', { class: 'btn primary lg', onclick: toggleAdd }, 'Paste a job')));
+    }
     if (wantAdd) { wantAdd = false; queueMicrotask(toggleAdd); }
     return host;
   }
@@ -96,7 +143,7 @@ export async function trackingView(me, go) {
   }
 
   function draw() { clear(body); const list = visible(); body.append(view === 'board' ? board(list) : table(list)); }
-  host.append(pageHead('Jobs', `${jobs.length} saved · ${applied} applied · ${talking} in conversation`), addJobPanel(go), suggestion(jobs, toggleAdd),
+  host.append(pageHead('Jobs', `${jobs.length} saved · ${applied} applied · ${talking} in conversation`), addJobPanel(go), checklist(me, jobs, go) || suggestion(jobs, toggleAdd),
     h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search'), search), filter, h('div', { class: 'grow' }), seg), body);
   draw();
   if (wantAdd) { wantAdd = false; queueMicrotask(toggleAdd); }

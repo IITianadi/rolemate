@@ -99,6 +99,7 @@ test('confirming a gap updates the score and the next tailored resume includes i
   const g = await api(`/api/jobs/${jobId}/gaps`, { method: 'POST', body: { skill: 'Kubernetes', has: true } });
   assert.equal(g.status, 200);
   assert.ok(g.data.job.match.score > before);
+  assert.equal(g.data.job.match.firstScore, before, 'the score when the job was saved is kept for the progress chip');
   assert.deepEqual(g.data.job.match.missingMust, []);
   assert.equal((await api(`/api/jobs/${jobId}/gaps`, { method: 'POST', body: { skill: 'Cobol', has: true } })).status, 400);
   const t = await api(`/api/jobs/${jobId}/tailor`, { method: 'POST' });
@@ -109,8 +110,12 @@ test('confirming a gap updates the score and the next tailored resume includes i
 });
 
 test('PDF is real, and HTML highlights metrics', async () => {
+  const job0 = (await api(`/api/jobs/${jobId}`)).data.job;
+  assert.ok(Array.isArray(job0.resumes[0].changes));
+  assert.equal(job0.resumes.find((x) => x.id === resumeId).downloaded, false);
   const pdf = await api(`/api/resumes/${resumeId}/pdf`, { raw: true });
   assert.equal(pdf.status, 200);
+  assert.equal((await api(`/api/jobs/${jobId}`)).data.job.resumes.find((x) => x.id === resumeId).downloaded, true, 'a download ticks the first-run checklist');
   const buf = Buffer.from(await pdf.arrayBuffer());
   assert.equal(buf.slice(0, 4).toString(), '%PDF');
   const html = await (await api(`/api/resumes/${resumeId}/html`, { raw: true })).text();

@@ -3,14 +3,14 @@ import { api, download, streamPost } from './api.js';
 import { icon } from './icons.js';
 import { renderMarkdown } from './markdown.js';
 import { STATUS_LABEL, bandOf } from './views-tracking.js';
-import { nextStep, path, ring, logoMark, sourceName, paywall } from './ui.js';
+import { nextStep, ring, logoMark, sourceName, paywall } from './ui.js';
 
 
 const aiBadge = () => h('span', { class: 'ai-badge' }, icon('sparkle'), 'AI');
 
 export async function jobView(id, me, go) {
   const host = h('div');
-  let job; let tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab') || 'info';
+  let job; let tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab') || 'overview';
   const state = { prep: null, research: null, stale: false, createdAt: '', running: false, steps: [], error: '', loaded: false };
   const chat = { messages: [], busy: false };
   let editing = false;
@@ -20,42 +20,61 @@ export async function jobView(id, me, go) {
   const body = h('div');
 
   const latest = () => job.resumes[0];
-  const dl = (r) => download(`/api/resumes/${r.id}/pdf`, 'resume.pdf').catch((e) => toast(e.message, true));
+  const dl = (r) => download(`/api/resumes/${r.id}/pdf`, 'resume.pdf').then(() => { if (!r.downloaded) { r.downloaded = true; toast('Downloaded. Next: apply, then mark it as applied here.'); draw(); } }).catch((e) => toast(e.message, true));
 
   async function tailor() {
     try { await api(`/api/jobs/${id}/tailor`, { method: 'POST' }); toast('Tailored resume ready'); await load(); draw(); }
     catch (e) { toast(e.status === 402 ? 'You’ve used all your free resumes. Pay now to keep going.' : e.message, true); }
   }
 
-  // ---------- Overview
-  function overview() {
-    const m = job.match || {};
-    const el = h('div', { class: 'stack' });
-    const band = bandOf(m);
-    el.append(h('div', { class: 'card' },
+  // ---------- Fit & resume: the result first (score + tailored resume), then what to fix.
+  function hero() {
+    const m = job.match || {}; const r = latest(); const band = bandOf(m);
+    const req = (m.matchedMust || []).length + (m.missingMust || []).length;
+    const up = m.score != null && m.firstScore != null && m.score > m.firstScore;
+    const left = h('div', null,
       h('div', { class: 'fit' }, m.score != null && ring(m.score),
         h('div', { class: 'words' }, h('h2', null, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match', unknown: 'No requirements found' }[band]),
-          h('p', null, m.score == null ? 'Paste the full description to score it.' : `${(m.matchedMust || []).length} of ${(m.matchedMust || []).length + (m.missingMust || []).length} required skills covered`))),
-      (m.breakdown?.length > 0) && h('details', { style: 'margin-top:22px' }, h('summary', { class: 'small muted' }, 'How the score is built'),
+          h('p', null, m.score == null ? 'Paste the full description to score it.' : req ? `${(m.matchedMust || []).length} of ${req} required skills covered` : 'Scored on experience and role'),
+          up && h('span', { class: 'delta' }, `↑ from ${m.firstScore}% when you saved it`))),
+      m.score != null && h('div', { class: 'target' }, h('b', null, m.score >= 75 ? 'Above 75%: a good fit to apply.' : '75% is a good target to apply.'),
+        h('div', { class: 'tbar' }, h('i', { style: `width:${m.score}%` }), h('u')), h('div', { class: 'row between' }, h('span', null, '0'), h('span', null, 'target 75'), h('span', null, '100'))),
+      (m.breakdown?.length > 0) && h('details', { style: 'margin-top:18px' }, h('summary', { class: 'small muted' }, 'How the score is built'),
         h('div', { class: 'stack', style: 'margin-top:14px' }, m.breakdown.map((b) => h('div', null,
           h('div', { class: 'row between small' }, h('strong', null, b.label), h('span', { class: 'muted' }, b.detail)),
-          h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': b.points, 'aria-valuemax': b.max }, h('i', { style: `width:${b.max ? Math.round((b.points / b.max) * 100) : 0}%` }))))))));
+          h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': b.points, 'aria-valuemax': b.max }, h('i', { style: `width:${b.max ? Math.round((b.points / b.max) * 100) : 0}%` })))))));
+    const paper = h('div', { class: 'paper', 'aria-hidden': 'true' }, ['h', 'm', 's', 'c', 'm', 'c', 's', 'm', 'c', 's', 'm'].map((c) => h('i', { class: c })));
+    const n = r ? (r.changes || []).length : 0;
+    const right = h('div', { class: 'right' }, r
+      ? [h('div', { class: 'resumeprev' }, paper, h('div', null,
+          h('span', { class: 'chip good', style: 'margin-bottom:10px' }, r.downloaded ? 'Downloaded' : 'Tailored resume ready'),
+          h('h2', { style: 'font-size:1.35rem;margin:0' }, n ? `${n} change${n === 1 ? '' : 's'} for this job` : 'Ready for this job'),
+          h('div', { class: 'muted small', style: 'margin-top:2px' }, 'Same layout. Nothing added that isn’t yours.'),
+          h('div', { class: 'row', style: 'margin-top:16px;gap:10px' }, h('button', { class: 'btn primary', onclick: () => dl(r) }, 'Download PDF'), h('a', { class: 'btn', href: `#/resume/${r.id}` }, 'Edit'),
+            h('button', { class: 'btn ghost sm', onclick: tailor, title: 'Tailor again from your current resume' }, icon('refresh', 15), 'Redo')))),
+        n > 0 && h('details', { class: 'changes' }, h('summary', null, 'See what we changed'),
+          h('ul', null, r.changes.map((c) => h('li', null, c)), h('li', { class: 'keep' }, '✓ Layout, fonts and sections unchanged'))),
+        job.resumes.length > 1 && h('div', { class: 'small muted', style: 'margin-top:12px' }, 'Earlier: ', job.resumes.slice(1).map((x) => h('a', { href: `#/resume/${x.id}`, style: 'margin-right:10px' }, fmtDate(x.created_at) || `#${x.id}`)))]
+      : h('div', { class: 'resumeprev' }, paper, h('div', null, h('h2', { style: 'font-size:1.35rem;margin:0' }, 'Your resume for this job'),
+          h('div', { class: 'muted small', style: 'margin:2px 0 16px' }, 'Same layout, reordered for this job.'), h('button', { class: 'btn primary', onclick: tailor }, 'Create resume'))));
+    return h('div', { class: 'card hero' }, left, right);
+  }
 
+  function gapsCard() {
+    const m = job.match || {};
     const gapRow = (skill, kind) => h('div', { class: 'gap' },
       h('span', { class: `chip ${kind === 'must' ? 'warn' : 'info'}` }, skill), h('span', { class: 'grow small muted' }, kind === 'must' ? 'Required' : 'Nice to have'),
-      h('button', { class: 'btn sm', onclick: async () => { try { const r = await api(`/api/jobs/${id}/gaps`, { method: 'POST', body: { skill, has: true } }); job = { ...job, ...r.job }; toast(`${skill} added`); draw(); } catch (e) { toast(e.message, true); } } }, 'I have this'));
+      h('button', { class: 'btn sm', onclick: async () => {
+        try {
+          const before = job.match?.score; const r = await api(`/api/jobs/${id}/gaps`, { method: 'POST', body: { skill, has: true } }); job = { ...job, ...r.job };
+          const after = job.match?.score; toast(after != null && before != null && after > before ? `${skill} added. Score ${before}% → ${after}%` : `${skill} added`); draw();
+        } catch (e) { toast(e.message, true); }
+      } }, 'I have this'));
     const missing = [...(m.missingMust || []).map((s) => gapRow(s, 'must')), ...(m.missingNice || []).map((s) => gapRow(s, 'nice'))];
-    el.append(h('div', { class: 'card', id: 'gaps' }, h('h2', null, missing.length ? 'Missing skills' : 'Nothing missing'),
+    return h('div', { class: 'card', id: 'gaps' }, h('h2', null, missing.length ? 'Missing skills' : 'Nothing missing'),
       missing.length ? [h('p', { class: 'muted small' }, 'Tap “I have this” only if it’s true. We never add a skill you haven’t confirmed.'), ...missing]
         : h('p', { class: 'muted' }, m.score == null ? 'Nothing to compare yet.' : 'Your resume covers every requirement.'),
-      (m.matchedMust?.length > 0) && h('div', { style: 'margin-top:20px' }, h('div', { class: 'label', style: 'margin-bottom:8px' }, 'You have'), h('div', { class: 'reqs' }, [...m.matchedMust, ...(m.matchedNice || [])].map((s) => h('span', { class: 'chip good' }, s))))));
-
-    const r = latest();
-    el.append(h('div', { class: 'card' }, h('h2', null, 'Your resume for this job'),
-      r ? h('div', { class: 'stack' }, h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => dl(r) }, 'Download PDF'), h('a', { class: 'btn', href: `#/resume/${r.id}` }, 'Edit'), h('button', { class: 'btn ghost', onclick: tailor }, icon('refresh', 15), 'Redo')),
-        job.resumes.length > 1 && h('div', { class: 'small muted' }, 'Earlier: ', job.resumes.slice(1).map((x) => h('a', { href: `#/resume/${x.id}`, style: 'margin-right:10px' }, fmtDate(x.created_at) || `#${x.id}`))))
-        : h('div', { class: 'stack' }, h('button', { class: 'btn primary', onclick: tailor }, 'Create resume'))));
-    return el;
+      (m.matchedMust?.length > 0) && h('div', { style: 'margin-top:20px' }, h('div', { class: 'label', style: 'margin-bottom:8px' }, 'You have'), h('div', { class: 'reqs' }, [...m.matchedMust, ...(m.matchedNice || [])].map((sk) => h('span', { class: 'chip good' }, sk)))));
   }
 
   // ---------- Interview prep (company research + brief + questions)
@@ -250,7 +269,7 @@ export async function jobView(id, me, go) {
       h('div', { class: 'card stack' }, h('h3', null, 'Keywords from this job'),
         h('p', { class: 'muted small', style: 'margin:0' }, h('span', { class: 'chip good' }, 'In your resume'), ' ', h('span', { class: 'chip warn' }, 'Missing')),
         kw(rq.mustHave, 'Required') || h('p', { class: 'muted small' }, 'No required skills detected.'), kw(rq.niceToHave, 'Nice to have'),
-        (m.missingMust || []).length > 0 && h('a', { class: 'btn sm', href: '#', onclick: (e) => { e.preventDefault(); tab = 'overview'; draw(); setTimeout(() => document.getElementById('gaps')?.scrollIntoView({ behavior: 'smooth' }), 50); } }, 'Review missing skills')),
+        (m.missingMust || []).length > 0 && h('a', { class: 'btn sm', href: '#', onclick: toGaps }, 'Review missing skills')),
       h('div', { class: 'card' }, h('h3', null, 'Details'),
         h('dl', { class: 'facts' },
           h('dt', null, 'Company'), h('dd', null, job.company || '–'), h('dt', null, 'Location'), h('dd', null, job.location || '–'),
@@ -266,39 +285,46 @@ export async function jobView(id, me, go) {
     return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 30 ? `${d} days ago` : t.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  // What should this person do next on this job?
+  // The one thing to do next on this job.
+  const toGaps = (e) => { e?.preventDefault(); const go2 = () => document.getElementById('gaps')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (tab !== 'overview') { tab = 'overview'; draw(); setTimeout(go2, 50); } else go2(); };
   function next() {
-    const m = job.match || {}; const r = latest(); const miss = (m.missingMust || []).length;
-    const apply = job.url ? h('a', { class: 'btn', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open job posting ↗') : null;
+    const m = job.match || {}; const r = latest(); const missing = m.missingMust || []; const miss = missing.length;
+    const posting = job.url ? h('a', { class: 'btn', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open job posting ↗') : null;
     if (!r) return nextStep({ title: 'Create your resume for this job', sub: 'Same layout, tailored to the job', actions: [h('button', { class: 'btn primary', onclick: tailor }, 'Create resume')] });
     if (['screening', 'interview'].includes(job.status)) return nextStep({ title: `Prepare for your ${STATUS_LABEL[job.status].toLowerCase()}`, sub: 'Likely questions with answers from your resume', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'prep'; draw(); } }, 'Open prep')] });
-    if (job.status === 'saved' && miss > 0) return nextStep({ title: `${miss} required skill${miss === 1 ? '' : 's'} missing`, sub: 'Confirm the ones you really have', actions: [h('a', { class: 'btn primary', href: '#', onclick: (e) => { e.preventDefault(); document.getElementById('gaps')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 'Review skills')] });
-    if (job.status === 'saved') return nextStep({ title: 'Download your resume and apply', sub: 'You press apply on the company’s site', actions: [h('button', { class: 'btn primary', onclick: () => dl(r) }, 'Download PDF'), apply] });
-    return nextStep({ title: 'Keep your prep sharp', sub: 'Questions and answers for this role', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'prep'; draw(); } }, 'Open prep')] });
+    if (job.status === 'offer') return nextStep({ title: 'You got an offer 🎉', sub: 'Use Ask AI to plan your negotiation', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'chat'; draw(); } }, 'Ask AI')] });
+    if (job.status === 'applied') return nextStep({ title: 'Applied. Get ready for the call', sub: 'Most screening calls come within two weeks. Prep takes 10 minutes.', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'prep'; draw(); } }, 'Open prep')] });
+    if (job.status === 'rejected') return nextStep({ title: 'Not this one. Keep going', sub: 'Your next match is waiting on the board', actions: [h('a', { class: 'btn primary', href: '#/tracking' }, 'Back to jobs')] });
+    if (miss > 0 && !r.downloaded) return nextStep({ title: miss === 1 ? `Confirm ${missing[0]}, then apply` : `${miss} required skills missing`, sub: miss === 1 ? 'If you have it, tap “I have this” and your score updates. If not, you can still apply.' : 'Confirm the ones you really have and your score updates. If not, you can still apply.', actions: [h('button', { class: 'btn primary', onclick: toGaps }, 'Review skills')] });
+    if (!r.downloaded) return nextStep({ title: 'Download your resume and apply', sub: 'You press apply on the company’s site', actions: [h('button', { class: 'btn primary', onclick: () => dl(r) }, 'Download PDF'), posting] });
+    return nextStep({ title: 'Now apply on the company’s site', sub: 'Then tap “Mark as applied” above, and interview prep opens up.', actions: posting ? [h('a', { class: 'btn primary', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open job posting ↗')] : [] });
   }
-  const stageIndex = () => (!latest() ? 1 : ['screening', 'interview', 'offer'].includes(job.status) ? 2 : job.status === 'applied' ? 3 : (job.match?.missingMust || []).length ? 0 : 1);
+
+  const move = async (v) => {
+    try {
+      const r = await api(`/api/jobs/${id}`, { method: 'PATCH', body: { status: v } }); job = { ...job, ...r.job };
+      toast(v === 'applied' ? 'Marked as applied. Nice work 🎉' : `Moved to ${STATUS_LABEL[v]}`); draw();
+    } catch (x) { toast(x.message, true); }
+  };
 
   function draw() {
     clear(host);
-    const move = async (v) => { try { const r = await api(`/api/jobs/${id}`, { method: 'PATCH', body: { status: v } }); job = { ...job, ...r.job }; toast(`Moved to ${STATUS_LABEL[v]}`); draw(); } catch (x) { toast(x.message, true); } };
-    const keys = Object.keys(STATUS_LABEL); const at = keys.indexOf(job.status);
-    const stages = h('div', { class: 'stages', role: 'group', 'aria-label': 'Stage' }, keys.map((v, i) =>
-      h('button', { class: `${i === at ? 'now' : i < at && v !== 'rejected' ? 'past' : ''} ${v === 'rejected' ? 'rej' : ''}`, 'aria-pressed': i === at ? 'true' : 'false', onclick: () => { if (i !== at) move(v); } }, STATUS_LABEL[v])));
+    const stage = h('label', { class: 'stagepill' }, h('small', null, 'Stage'),
+      h('select', { 'aria-label': 'Stage', onchange: (e) => move(e.target.value) }, Object.keys(STATUS_LABEL).map((v) => h('option', { value: v, selected: v === job.status }, STATUS_LABEL[v]))));
     const notes = h('textarea', { rows: 3, placeholder: 'Notes' }); notes.value = job.notes || '';
+    const meta = [job.company || 'Company not detected', job.location, savedAgo() && `Saved ${savedAgo()}`].filter(Boolean).join(' · ');
     append(host,
-      h('div', { class: 'row between', style: 'margin-bottom:26px;align-items:flex-end' },
-        h('div', { class: 'row', style: 'gap:16px;flex-wrap:nowrap;align-items:center' }, logoMark(job, 56), h('div', null, h('div', { class: 'row tight', style: 'margin-bottom:8px' }, job.company ? h('span', { class: 'chip primary' }, job.company) : h('span', { class: 'chip warn' }, 'Company not detected'), job.location && h('span', { class: 'muted small' }, job.location), savedAgo() && h('span', { class: 'muted small' }, `· Saved ${savedAgo()}`)),
-          h('h1', null, job.title || 'Untitled role'),
-          h('div', { class: 'row', style: 'gap:6px;margin-top:6px' }, job.url && h('a', { class: 'small', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, job.url ? `Posted on ${sourceName(job)} ↗` : 'Original posting ↗'), h('button', { class: 'btn sm ghost', onclick: () => { editing = !editing; draw(); } }, editing ? 'Cancel' : 'Edit details')))),
-        h('div', { class: 'row' }, h('button', { class: 'btn ghost danger sm', onclick: async () => { await api(`/api/jobs/${id}`, { method: 'DELETE' }); toast('Deleted'); go('#/tracking'); } }, 'Delete'))),
+      h('div', { class: 'jobhead' }, logoMark(job, 56),
+        h('div', { class: 'grow', style: 'min-width:240px' }, h('h1', null, job.title || 'Untitled role'),
+          h('div', { class: 'meta' }, meta, job.url && [' · ', h('a', { href: job.url, target: '_blank', rel: 'noopener noreferrer' }, `Posted on ${sourceName(job)} ↗`)]),
+          h('div', { class: 'row', style: 'gap:2px;margin-top:4px' }, h('button', { class: 'btn sm ghost', onclick: () => { editing = !editing; draw(); } }, editing ? 'Cancel' : 'Edit details'),
+            h('button', { class: 'btn ghost danger sm', onclick: async () => { await api(`/api/jobs/${id}`, { method: 'DELETE' }); toast('Deleted'); go('#/tracking'); } }, 'Delete'))),
+        h('div', { class: 'acts' }, stage, job.status === 'saved' && h('button', { class: 'btn primary', onclick: () => move('applied') }, 'Mark as applied'))),
       editing && editForm(),
-      stages,
-      path(['Review fit', 'Resume', 'Prepare', 'Apply'], stageIndex()),
       next(),
-      h('div', { class: 'tabs', role: 'tablist' }, [['info', 'Job info', null], ['overview', 'Fit & resume', null], ['prep', 'Interview prep', null], ['chat', 'Ask AI', null]].map(([k, l]) =>
+      h('div', { class: 'tabs', role: 'tablist' }, [['overview', 'Fit & resume'], ['info', 'Job info'], ['prep', 'Interview prep'], ['chat', 'Ask AI']].map(([k, l]) =>
         h('button', { class: tab === k ? 'on' : '', role: 'tab', onclick: () => { tab = k; draw(); } }, l))));
-    if (tab === 'info') host.append(jobInfo());
-    else if (tab === 'overview') host.append(h('div', { class: 'layout2' }, overview(), h('div', { class: 'card' }, h('h3', null, 'Notes'), notes, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: async () => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { notes: notes.value } }); toast('Saved'); } catch (e) { toast(e.message, true); } } }, 'Save')))));
+    if (tab === 'overview') host.append(hero(), h('div', { class: 'layout2' }, gapsCard(), h('div', { class: 'card' }, h('h3', null, 'Notes'), notes, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: async () => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { notes: notes.value } }); toast('Saved'); } catch (e) { toast(e.message, true); } } }, 'Save')))));
     else if (!job.credit && (tab === 'prep' || tab === 'chat')) host.append(paywall(me.quota, 'Pay now to unlock interview prep and Ask AI for this job.'));
     else if (tab === 'prep') host.append(prepView());
     else if (tab === 'chat') host.append(chatView());

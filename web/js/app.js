@@ -70,7 +70,7 @@ async function route() {
     else if (page === 'gaps') view = await gapsView();
     else if (page === 'profile' && arg === 'resume') view = await masterEditorView(go);
     else if (page === 'profile') view = await profileView(me, go);
-    else if (page === 'settings') view = await settingsView(me, go);
+    else if (page === 'settings') view = await settingsView(me, go, arg);
     else view = h('div', { class: 'card empty' }, h('h2', null, 'Page not found'), h('a', { href: '#/tracking' }, 'Go to Tracking'));
     clear(main); main.append(view);
   } catch (e) {

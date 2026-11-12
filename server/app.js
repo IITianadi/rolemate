@@ -116,12 +116,17 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     return r;
   };
   const jobOut = (r) => {
-    const resumes = db.prepare('SELECT id, label, created_at, updated_at FROM resumes WHERE job_id = ? ORDER BY id DESC').all(r.id);
+    const resumes = db.prepare('SELECT id, label, changes, created_at, updated_at, downloaded_at FROM resumes WHERE job_id = ? ORDER BY id DESC').all(r.id)
+      .map(({ changes, downloaded_at: dl, ...x }) => ({ ...x, changes: j(changes, []), downloaded: !!dl }));
     return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, logo: r.logo || '', status: r.status, notes: r.notes,
       credit: (db.prepare('SELECT plan FROM users WHERE id = ?').get(r.user_id)?.plan !== 'free') || !!db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND job_key = ?').get(r.user_id, `job:${r.id}`),
       requirements: j(r.requirements, {}), match: j(r.match, {}), resumes, createdAt: r.created_at, updatedAt: r.updated_at, appliedAt: r.applied_at };
   };
-  const rescore = (profile, req) => scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, req);
+  // firstScore: the score when the job was first saved, kept through rescoring so the page can show progress honestly.
+  const rescore = (profile, req, prev) => {
+    const m = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, req);
+    return { ...m, firstScore: prev && prev.firstScore !== undefined ? prev.firstScore : prev ? (prev.score ?? null) : m.score };
+  };
 
   async function tailorJob(user, profile, jobR, { force } = {}) {
     const req = j(jobR.requirements, {});
@@ -358,7 +363,6 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const hints = { title: finalTitle, company, location: believe(hin.location) };
     const reqs = await extractJob(text, hints);
     if (!reqs.company) reqs.company = weakCompany(); // last resort: site name / page title / URL slug
-    const match = rescore(profile, reqs);
     const externalId = String(req.body?.externalId || '').slice(0, 80);
     // Logo: only an https image address the page itself showed; otherwise the company website's icon. Stored as a plain
     // string and shown by the browser (the server never fetches it).
@@ -387,6 +391,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       // Same address but a different posting (single-page sites, stale pages): keep it as its own job.
       if (!existing && rows.length) jobKey = `${prefix}${shortHash(text)}`;
     }
+    const match = rescore(profile, reqs, existing ? j(existing.match, {}) : null);
     let jobId;
     if (existing) {
       jobId = existing.id;
@@ -447,7 +452,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       profile.confirmedSkills.push(skill);
       db.prepare("UPDATE profiles SET confirmed_skills = ?, updated_at = datetime('now') WHERE user_id = ?").run(JSON.stringify(profile.confirmedSkills), req.user.id);
     }
-    const match = rescore(profile, reqs);
+    const match = rescore(profile, reqs, j(r.match, {}));
     db.prepare("UPDATE jobs SET match = ?, updated_at = datetime('now') WHERE id = ?").run(JSON.stringify(match), r.id);
     res.json({ job: jobOut(jobRow(req.user.id, r.id)) });
   });
@@ -587,6 +592,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const data = j(r.data, null);
     let pdf;
     try { pdf = await renderPdf(data); } catch (e) { console.error('[pdf]', e.message); throw httpError(500, 'Could not generate the PDF. Please try again.'); }
+    db.prepare("UPDATE resumes SET downloaded_at = datetime('now') WHERE id = ? AND downloaded_at IS NULL").run(r.id);
     const name = (r.label || data.header.name || 'resume').replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'resume';
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${name}.pdf"` }).send(Buffer.from(pdf));
   });

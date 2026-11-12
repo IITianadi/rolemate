@@ -46,9 +46,9 @@ export async function gapsView() {
 
 const codeBlock = (text) => h('div', { class: 'row', style: 'gap:8px;flex-wrap:nowrap;align-items:flex-start' }, h('pre', { class: 'code grow', style: 'margin:0' }, text), h('button', { class: 'btn sm icon', 'aria-label': 'Copy', onclick: () => copyText(text) }, icon('copy', 15)));
 
-export async function settingsView(me, go) {
+export async function settingsView(me, go, open) {
   const paid = new URLSearchParams(location.search).get('paid') === '1';
-  let tab = paid ? 'billing' : 'account';
+  let tab = paid ? 'billing' : ['account', 'extension', 'billing'].includes(open) ? open : 'account';
   if (paid) history.replaceState(null, '', location.pathname + location.hash);
   const host = h('div');
   const body = h('div');
