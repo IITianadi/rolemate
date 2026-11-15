@@ -268,8 +268,14 @@ export async function jobView(id, me, go) {
   }
   const BULLET = /^([-•*·▪●◦]|\d+[.)])\s+/;
   function secBody(lines) {
+    // Job sites print list items one per line with no blank line between them; paragraphs are separated by blank lines.
+    // A run of such lines (3+, or 2 short ones) is shown as a list, like on the posting.
+    const marked = []; let run = [];
+    const flush = () => { const asList = (run.length >= 3 && run.every((x) => x.length <= 320)) || (run.length === 2 && run.every((x) => x.length <= 200)); marked.push(...run.map((x) => (asList && !BULLET.test(x) ? `• ${x}` : x))); run = []; };
+    for (const l of lines) { if (l) run.push(l); else { flush(); marked.push(''); } }
+    flush();
     const out = []; let ul = null;
-    for (const l of lines) {
+    for (const l of marked) {
       if (BULLET.test(l)) { if (!ul) { ul = h('ul', { class: 'tidy' }); out.push(ul); } ul.append(h('li', null, l.replace(BULLET, ''))); }
       else if (l) { ul = null; out.push(h('p', null, l)); } else ul = null;
     }
@@ -283,7 +289,7 @@ export async function jobView(id, me, go) {
     const secs = parseJd(job.jdText);
     const left = h('div', { class: 'card jdinfo' }, h('h2', null, 'Job description'),
       secs.length ? secs.map((x) => h('section', null, h('h3', null, x.title), secBody(x.lines))) : h('p', { class: 'muted' }, 'No description was captured. Open the posting and capture it again.'),
-      h('details', { style: 'margin-top:18px' }, h('summary', { class: 'small muted' }, 'Show the raw captured text'), h('pre', { class: 'jd', style: 'margin-top:12px' }, job.jdText || '')));
+      h('details', { style: 'margin-top:18px' }, h('summary', { class: 'small muted' }, 'Show the raw captured text'), h('pre', { class: 'jd', style: 'margin-top:12px' }, job.jdRaw || job.jdText || '')));
     const right = h('div', { class: 'stack' },
       h('div', { class: 'card stack' }, h('h3', null, 'Keywords from this job'),
         h('p', { class: 'muted small', style: 'margin:0' }, h('span', { class: 'chip good' }, 'In your resume'), ' ', h('span', { class: 'chip warn' }, 'Missing')),

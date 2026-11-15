@@ -6,7 +6,8 @@ import { openDb } from './db.js';
 import { hashPassword, verifyPassword, createSession, userFromToken, destroySession, rateLimiter } from './auth.js';
 import { parseResumeFile, parseWarnings } from './lib/resume-parse.js';
 import { sanitizeResume, httpError } from './lib/model.js';
-import { extractJob, pickTitle, cleanTitle, pickCompany } from './lib/jd.js';
+import { cleanJdText } from './lib/jd-clean.js';
+import { extractJob, extractBasic, pickTitle, cleanTitle, pickCompany } from './lib/jd.js';
 import { scoreMatch, estimateYears } from './lib/match.js';
 import { tailorResume, suggestRewrites } from './lib/tailor.js';
 import { renderHtml, renderPdf } from './lib/render.js';
@@ -345,7 +346,10 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   // ---------- capture (called by the extension)
   app.post('/api/capture', auth, async (req, res) => {
     const profile = needProfile(req.user.id);
+    // text: everything captured (the job's header with title/company sits above the description, so it is used to verify
+    // them). posting: just the job post, without search results, buttons and company panels; requirements come from it.
     const text = String(req.body?.text || '').trim().slice(0, 60000);
+    const posting = cleanJdText(text, { source: req.body?.source });
     if (text.length < 80) throw httpError(422, 'Not enough text on this page. Select the job description and try again.');
     const url = String(req.body?.url || '').slice(0, 1000);
     const source = String(req.body?.source || '').slice(0, 60);
@@ -361,7 +365,9 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const weakCompany = () => pickCompany(hin.companyCandidates, { title: finalTitle, text, allowUnverified: true });
     const believe = (v) => (trusted || title || mentioned(v)) ? clean(v) : '';
     const hints = { title: finalTitle, company, location: believe(hin.location) };
-    const reqs = await extractJob(text, hints);
+    // The title usually sits in the page header above the description: read it from the full text before cleaning.
+    if (!hints.title && posting !== text) hints.title = cleanTitle(extractBasic(text, hints).title || '');
+    const reqs = await extractJob(posting, hints);
     if (!reqs.company) reqs.company = weakCompany(); // last resort: site name / page title / URL slug
     const externalId = String(req.body?.externalId || '').slice(0, 80);
     // Logo: only an https image address the page itself showed; otherwise the company website's icon. Stored as a plain
@@ -420,7 +426,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
 
   app.get('/api/jobs/:id', auth, (req, res) => {
     const r = jobRow(req.user.id, req.params.id);
-    res.json({ job: { ...jobOut(r), jdText: r.jd_text } });
+    res.json({ job: { ...jobOut(r), jdText: cleanJdText(r.jd_text, { source: r.source }), jdRaw: r.jd_text } });
   });
 
   app.patch('/api/jobs/:id', auth, (req, res) => {
@@ -470,7 +476,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const best = db.prepare('SELECT data FROM resumes WHERE job_id = ? ORDER BY id DESC LIMIT 1').get(r.id);
     return {
       resume: best ? j(best.data, profile.resume) : profile.resume,
-      derived: deriveProfile(profile.resume), jdText: r.jd_text, match: job.match,
+      derived: deriveProfile(profile.resume), jdText: cleanJdText(r.jd_text, { source: r.source }), match: job.match,
       job: { ...job.requirements, title: job.title || job.requirements.title, company: job.company || job.requirements.company, location: job.location },
     };
   };
