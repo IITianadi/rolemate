@@ -9,7 +9,7 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 const METRIC_RE = new RegExp([
   String.raw`(?:₹|Rs\.?\s?|INR\s?|\$|€|£)\s?\d[\d,]*(?:\.\d+)?\s?(?:k|K|L|M|B|Cr|cr|crore|crores|lakh|lakhs|lacs|mn|million|billion)?`,
   String.raw`\d[\d,]*(?:\.\d+)?\s?(?:%|x\b|X\b)`,
-  String.raw`\d[\d,]*(?:\.\d+)?\s?(?:k|K|L|M|B|Cr|cr|crore|crores|lakh|lakhs|lacs|mn|million|billion)\+?(?![a-z])`,
+  String.raw`\d[\d,]*(?:\.\d+)?\s?(?:k|K|L|M|B|Cr|cr|crore|crores|lakh|lakhs|lacs|mn|million|billion)\+?(?![A-Za-z])`,
   String.raw`\d[\d,]*\+?\s(?:users|customers|clients|members|engineers|people|employees|developers|projects|applications|apps|requests|transactions|stores|leads|orders|countries|cities|hours|days|weeks|months|accounts|candidates|vendors|services|teams|reports|tickets|releases)\b`,
 ].join('|'), 'g');
 
@@ -100,10 +100,11 @@ p{margin:0 0 3pt}
 .entry{margin-top:${fs * 0.6}pt}.entry:first-of-type{margin-top:0}
 .row{display:flex;justify-content:space-between;gap:12pt;font-weight:700}.row .d{font-weight:400;white-space:nowrap}.sub-t{font-weight:400}
 .hd{margin-top:${fs * 0.15}pt}
-.li,.tx,.sub{margin-top:${fs * 0.15}pt;break-inside:avoid}
+.li,.tx,.sub{margin-top:${fs * 0.15}pt;break-inside:avoid}.sub{margin-top:${fs * 0.5}pt}
 .li{padding-left:${hang.toFixed(1)}pt;text-indent:-${hang.toFixed(1)}pt}
 .li::before{content:"${bullet}";display:inline-block;width:${hang.toFixed(1)}pt;text-indent:0;font-size:${fs * 0.8}pt;vertical-align:1pt}
 b{font-weight:700}
+@media screen{body{padding:${mg.top}mm ${mg.right}mm ${mg.bottom}mm ${mg.left}mm}}
 ${marks ? '.chg{background:#dff3e8;box-shadow:0 0 0 2pt #dff3e8;border-radius:2pt}.chg.flash{animation:fl 1.6s ease-out}@keyframes fl{0%{background:#9fe0bd;box-shadow:0 0 0 4pt #9fe0bd}100%{background:#dff3e8;box-shadow:0 0 0 2pt #dff3e8}}' : ''}
 </style></head><body><header><h1>${esc(resume.header.name)}</h1>${(resume.header.lines || []).map((l) => `<p>${esc(l)}</p>`).join('')}</header>${sectionHtml}</body></html>`;
 }

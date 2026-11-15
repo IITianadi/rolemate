@@ -75,3 +75,7 @@ test('preview marks highlight changed bullets only when asked (never in the PDF 
   assert.match(marked, /class="li chg" data-b="b2"/);
   assert.ok(!marked.includes('data-b="b1"'));
 });
+
+test('"1 MVP" is not read as 1 million; 2M and 5K still are', () => {
+  assert.equal(highlightMetrics('Phase 1 MVP for 2M users'), 'Phase 1 MVP for <b>2M</b> users');
+});
