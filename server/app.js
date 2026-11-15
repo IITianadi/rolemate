@@ -584,7 +584,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   });
 
   // Preview of unsaved edits: the editor posts its current model and gets HTML back.
-  app.post('/api/preview', auth, (req, res) => sendResumeHtml(res, sanitizeResume(req.body?.resume)));
+  app.post('/api/preview', auth, (req, res) => sendResumeHtml(res, sanitizeResume(req.body?.resume), Array.isArray(req.body?.marks) ? new Set(req.body.marks.slice(0, 200).map(String)) : null));
   app.get('/api/resumes/:id/html', auth, (req, res) => sendResumeHtml(res, j(resumeRow(req.user.id, req.params.id).data, null)));
 
   app.get('/api/resumes/:id/pdf', auth, async (req, res) => {
@@ -630,8 +630,8 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   return app;
 }
 
-function sendResumeHtml(res, resume) {
-  res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'" }).send(renderHtml(resume));
+function sendResumeHtml(res, resume, marks = null) {
+  res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'" }).send(renderHtml(resume, { marks }));
 }
 
 const clean = (v) => (typeof v === 'string' ? v.trim().slice(0, 200) : '');

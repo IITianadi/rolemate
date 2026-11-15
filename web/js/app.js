@@ -72,7 +72,7 @@ async function route() {
     else if (page === 'profile') view = await profileView(me, go);
     else if (page === 'settings') view = await settingsView(me, go, arg);
     else view = h('div', { class: 'card empty' }, h('h2', null, 'Page not found'), h('a', { href: '#/tracking' }, 'Go to Tracking'));
-    clear(main); main.append(view);
+    clear(main); view.classList?.add('enter'); main.append(view);
   } catch (e) {
     clear(main); main.append(h('div', { class: 'error' }, e.message), h('p', null, h('a', { href: '#/tracking' }, 'Back to Tracking')));
   }

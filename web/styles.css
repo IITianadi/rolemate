@@ -225,3 +225,39 @@ details.changes ul { margin: 10px 0 0; padding-left: 18px; color: var(--ink2); f
 .sug { padding: 14px 16px; } .sug ins { font-size: 14.5px; line-height: 1.5; margin-top: 0; } .sug .was { margin-top: 6px; font-size: 13px; color: var(--muted); line-height: 1.45; } .sug .was del { color: var(--faint); }
 .sugdone { color: var(--good); background: var(--good-bg); padding: 12px 16px; border-radius: 14px; font-weight: 550; font-size: 14px; }
 details.card.changes { padding: 18px 22px; } details.card.changes summary { margin: 0; }
+
+/* ---------- Motion: quiet, but the screen reacts to everything you do ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes fadein { from { opacity: 0; } }
+.main > .enter > * { animation: rise .55s var(--ease) both; }
+.main > .enter > *:nth-child(2) { animation-delay: .05s; } .main > .enter > *:nth-child(3) { animation-delay: .1s; } .main > .enter > *:nth-child(4) { animation-delay: .15s; } .main > .enter > *:nth-child(n+5) { animation-delay: .2s; }
+.board .jcard { animation: rise .5s var(--ease) both; animation-delay: calc(.12s + var(--i, 0) * 45ms); }
+table.t tbody tr { transition: background .2s; } table.t tbody tr:hover { background: var(--hover); }
+.btn { transition: transform .15s var(--ease), background .2s, box-shadow .3s var(--ease); } .btn:active:not(:disabled) { transform: scale(.96); }
+.btn.primary:hover:not(:disabled) { box-shadow: 0 14px 28px -12px rgba(47, 107, 255, .75); }
+/* Dark "Next" bar: a slow blue glow drifts across it */
+@keyframes drift { 0% { background-position: 0% 0%, 0 0; } 100% { background-position: 100% 0%, 0 0; } }
+.next { background: radial-gradient(520px 220px at 50% 0%, rgba(47, 107, 255, .32), transparent 70%) 0 0 / 200% 100% no-repeat, var(--ink); animation: drift 9s ease-in-out infinite alternate; }
+/* Bars fill in from the left */
+@keyframes fillx { from { transform: scaleX(0); } }
+.target .tbar i, .progress-track i, .bar > i { transform-origin: left; animation: fillx 1.1s var(--ease) both .15s; }
+.target .tbar u { animation: fadein .4s both 1s; }
+/* Live indicators */
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31, 181, 122, .55); } 70% { box-shadow: 0 0 0 7px rgba(31, 181, 122, 0); } 100% { box-shadow: 0 0 0 0 rgba(31, 181, 122, 0); } }
+.livedot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good-solid); margin-right: 8px; vertical-align: 2px; animation: pulse 2s infinite; }
+.savestate { display: inline-flex; align-items: center; gap: 7px; transition: color .3s; } .savestate::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good-solid); }
+.savestate.busy::before { background: var(--warn-solid); animation: pulse 1s infinite; } .savestate.ok { color: var(--good); }
+/* Job dates */
+.jcard .when { margin-top: 10px; font-size: 12.5px; color: var(--faint); display: flex; align-items: center; gap: 8px; }
+.newdot { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; color: var(--good); background: var(--good-bg); padding: 1px 8px 1px 7px; border-radius: 999px; margin-right: 6px; }
+.newdot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good-solid); animation: pulse 2s infinite; }
+/* Editor: what changed */
+.preview .phead { flex-wrap: wrap; gap: 6px 12px; } .preview .phead b { display: inline-flex; align-items: center; }
+.legend { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--good); background: var(--good-bg); padding: 3px 10px; border-radius: 999px; animation: fadein .3s; }
+.legend i { width: 12px; height: 9px; border-radius: 2px; background: #9fe0bd; }
+.acclist { display: grid; gap: 8px; margin-top: 12px; }
+.accrow { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 14px; border-radius: 14px; background: var(--sunken); transition: background .2s, transform .2s var(--ease); animation: rise .4s var(--ease) both; }
+.accrow:hover { background: var(--good-bg); transform: translateX(3px); }
+.accnew { font-size: 14px; line-height: 1.45; grid-column: 1; } .accwas { font-size: 12.5px; color: var(--muted); grid-column: 1; } .accwas del { color: var(--faint); }
+.accgo { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 13px; font-weight: 600; color: var(--primary); }
+.sug { animation: rise .35s var(--ease) both; }

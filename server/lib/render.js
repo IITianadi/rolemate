@@ -25,8 +25,9 @@ function fontFaces(family) {
   return fontCache.get(family);
 }
 
-export function renderHtml(resume) {
-  return renderHtmlPure(resume, { fontCss: fontFaces(resume.structure?.fontFamily || 'arimo') });
+// marks: dashboard preview only. The PDF path below calls this without it.
+export function renderHtml(resume, { marks = null } = {}) {
+  return renderHtmlPure(resume, { fontCss: fontFaces(resume.structure?.fontFamily || 'arimo'), marks });
 }
 
 function findChromium() {

@@ -65,3 +65,13 @@ test('interview prep: SQL evidence does not borrow PostgreSQL bullets; every que
   assert.ok(prep.questions.every((q) => q.answer.length > 20));
   assert.ok(!JSON.stringify(prep).includes('needsInput'));
 });
+
+test('preview marks highlight changed bullets only when asked (never in the PDF html)', async () => {
+  const { renderHtml } = await import('../server/lib/render-html.js');
+  const r = { header: { name: 'A', lines: [] }, structure: {}, sections: [{ heading: 'Work', kind: 'list', items: [{ title: 'X', bullets: [{ id: 'b1', text: 'Did one' }, { id: 'b2', text: 'Did two' }] }] }] };
+  const plain = renderHtml(r);
+  assert.ok(!plain.includes('chg'));
+  const marked = renderHtml(r, { marks: new Set(['b2']) });
+  assert.match(marked, /class="li chg" data-b="b2"/);
+  assert.ok(!marked.includes('data-b="b1"'));
+});

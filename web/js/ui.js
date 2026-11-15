@@ -19,7 +19,9 @@ export function ring(score) {
   const mk = (cls) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('class', cls); c.setAttribute('cx', 60); c.setAttribute('cy', 60); c.setAttribute('r', 54); svg.append(c); return c; };
   mk('bg'); const arc = mk('arc'); arc.style.strokeDashoffset = '339.3';
   requestAnimationFrame(() => requestAnimationFrame(() => { arc.style.strokeDashoffset = String(339.3 * (1 - (score ?? 0) / 100)); }));
-  return h('div', { class: 'ringbox', role: 'img', 'aria-label': `Match score ${score ?? 'unknown'} out of 100` }, svg, h('div', { class: 'n' }, score == null ? '–' : score, score != null && h('small', null, '%')));
+  const num = h('span', null, score == null ? '–' : '0');
+  if (score != null) countUp(num, score, 1100);
+  return h('div', { class: 'ringbox', role: 'img', 'aria-label': `Match score ${score ?? 'unknown'} out of 100` }, svg, h('div', { class: 'n' }, num, score != null && h('small', null, '%')));
 }
 
 export function stepper(current) {
@@ -70,4 +72,32 @@ export function paywall(quota, extra) {
   return h('div', { class: 'card paywall' }, h('h2', null, 'You’re out of credits'),
     h('p', { class: 'muted' }, `${extra || 'Pay now to keep going.'} One credit covers one job: saving it, tailoring, interview prep and Ask AI for that job.`),
     packButtons(quota));
+}
+
+// Server timestamps are UTC "YYYY-MM-DD HH:MM:SS". `ago` is short and human; `exact` goes in the tooltip.
+export function parseTs(ts) {
+  if (!ts) return null;
+  const t = new Date(String(ts).includes('T') ? ts : String(ts).replace(' ', 'T') + 'Z');
+  return Number.isNaN(t.getTime()) ? null : t;
+}
+export function ago(ts) {
+  const t = parseTs(ts); if (!t) return '';
+  const s = Math.max(0, (Date.now() - t.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (t >= today) return `today, ${t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+  if (t >= new Date(today.getTime() - 86400000)) return `yesterday, ${t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+  const d = Math.floor((today - t) / 86400000) + 1;
+  return d < 7 ? `${d} days ago` : t.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(t.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) });
+}
+export const exact = (ts) => { const t = parseTs(ts); return t ? t.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''; };
+export const isFresh = (ts) => { const t = parseTs(ts); return !!t && Date.now() - t.getTime() < 24 * 3600 * 1000; };
+
+// Numbers that count up when they appear (score ring, counters). Respects reduced-motion.
+export function countUp(el, to, ms = 900) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { el.textContent = String(to); return; }
+  const t0 = performance.now();
+  const step = (t) => { const k = Math.min(1, (t - t0) / ms); el.textContent = String(Math.round(to * (1 - Math.pow(1 - k, 3)))); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
 }

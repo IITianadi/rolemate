@@ -3,7 +3,7 @@ import { api, download, streamPost } from './api.js';
 import { icon } from './icons.js';
 import { renderMarkdown } from './markdown.js';
 import { STATUS_LABEL, bandOf } from './views-tracking.js';
-import { nextStep, ring, logoMark, sourceName, paywall } from './ui.js';
+import { nextStep, ring, logoMark, sourceName, paywall, ago } from './ui.js';
 
 
 const aiBadge = () => h('span', { class: 'ai-badge' }, icon('sparkle'), 'AI');
@@ -278,12 +278,7 @@ export async function jobView(id, me, go) {
           (rq.minYears != null) && [h('dt', null, 'Experience'), h('dd', null, rq.maxYears ? `${rq.minYears}–${rq.maxYears} years` : `${rq.minYears}+ years`)])));
     return h('div', { class: 'layout2 wideinfo' }, left, right);
   }
-  function savedAgo() {
-    const t = job.createdAt && new Date(String(job.createdAt).includes('T') ? job.createdAt : String(job.createdAt).replace(' ', 'T') + 'Z');
-    if (!t || Number.isNaN(t.getTime())) return '';
-    const d = Math.floor((Date.now() - t.getTime()) / 86400000);
-    return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 30 ? `${d} days ago` : t.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  }
+  const savedAgo = () => ago(job.createdAt);
 
   // The one thing to do next on this job.
   const toGaps = (e) => { e?.preventDefault(); const go2 = () => document.getElementById('gaps')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (tab !== 'overview') { tab = 'overview'; draw(); setTimeout(go2, 50); } else go2(); };

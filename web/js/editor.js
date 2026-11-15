@@ -11,6 +11,10 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
   let state = clone(resume);
   let sugs = clone(suggestions);
   const history = [];
+  // Bullet text as it was when the editor opened: anything different, or any accepted rewording, is highlighted in the preview.
+  const original = new Map();
+  for (const s of state.sections) for (const it of s.items) for (const b of it.bullets || []) original.set(b.id, b.text);
+  let flashId = null;
   let dirty = false;
 
   const root = h('div');
@@ -29,16 +33,39 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
   };
   frame.addEventListener('load', fit);
   if (window.ResizeObserver) new ResizeObserver(fit).observe(pane);
-  const status = h('span', { class: 'muted small' }, 'Saved');
+  const status = h('span', { class: 'savestate muted small' }, 'Saved');
   const undoBtn = h('button', { class: 'btn sm ghost', disabled: true, onclick: undo }, '↶ Undo');
 
+  const legend = h('span', { class: 'legend', hidden: true });
+  function changedIds() {
+    const ids = new Set(sugs.filter((x) => x.status === 'accepted').map((x) => x.bulletId));
+    for (const s of state.sections) for (const it of s.items) for (const b of it.bullets || []) if (!original.has(b.id) || original.get(b.id) !== b.text) ids.add(b.id);
+    const live = new Set(); for (const s of state.sections) for (const it of s.items) for (const b of it.bullets || []) if (ids.has(b.id)) live.add(b.id);
+    return live;
+  }
   const refreshPreview = debounce(async () => {
-    try { frame.srcdoc = await apiText('/api/preview', { method: 'POST', body: { resume: state } }); } catch { /* keep the last preview */ }
-  }, 450);
+    const marks = [...changedIds()];
+    legend.hidden = !marks.length;
+    legend.replaceChildren(h('i'), `${marks.length} line${marks.length === 1 ? '' : 's'} changed${autosave ? ' for this job' : ''}`);
+    try { frame.srcdoc = await apiText('/api/preview', { method: 'POST', body: { resume: state, marks } }); } catch { /* keep the last preview */ }
+  }, 300);
+  // After the preview reloads: scroll to the line that just changed and flash it, so it is obvious what moved.
+  frame.addEventListener('load', () => {
+    if (!flashId) return;
+    const id = flashId; flashId = null;
+    try {
+      const el = frame.contentDocument.querySelector(`[data-b="${CSS.escape(id)}"]`); if (!el) return;
+      el.classList.add('flash');
+      const k = pane.getBoundingClientRect().width / PAGE_W;
+      const box = pane.parentElement;
+      box.scrollTo({ top: Math.max(0, pane.offsetTop + el.offsetTop * k - box.clientHeight / 3), behavior: 'smooth' });
+    } catch { /* preview not readable */ }
+  });
+  const showInPreview = (id) => { flashId = id; refreshPreview(); };
 
   const autoSave = debounce(() => { if (dirty) save(true); }, 1200);
   function touch(structural) {
-    dirty = true; status.textContent = autosave ? 'Saving…' : 'Unsaved changes';
+    dirty = true; status.textContent = autosave ? 'Saving…' : 'Unsaved changes'; status.classList.add('busy');
     if (structural) { undoBtn.disabled = false; }
     refreshPreview();
     if (autosave) autoSave();
@@ -147,13 +174,15 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
       return;
     }
     if (!pending.length) {
-      const n = sugs.filter((x) => x.status === 'accepted').length;
-      sugHost.append(h('div', { class: 'sugdone' }, `✓ All suggestions reviewed. ${n ? `${n} accepted.` : 'You kept your original wording.'}`));
+      const acc = sugs.filter((x) => x.status === 'accepted' && findBullet(x.itemId, x.bulletId));
+      sugHost.append(h('div', { class: 'sugdone' }, `✓ All suggestions reviewed. ${acc.length ? `${acc.length} accepted, highlighted in green on the right.` : 'You kept your original wording.'}`));
+      if (acc.length) sugHost.append(h('div', { class: 'acclist' }, acc.map((x) => h('button', { class: 'accrow', title: 'Show in preview', onclick: () => showInPreview(x.bulletId) },
+        h('span', { class: 'accnew' }, x.proposed), h('span', { class: 'accwas' }, 'Was: ', h('del', null, x.original)), h('span', { class: 'accgo' }, 'Show →')))));
       return;
     }
     sugHost.append(h('div', { class: 'row between', style: 'margin-bottom:4px' },
       h('div', null, h('h3', { style: 'margin:0' }, 'Suggested rewordings'), h('div', { class: 'muted small' }, `${pending.length} to review. Same facts and numbers, closer to the job’s wording. Accept only what’s true.`)),
-      pending.length > 1 && h('button', { class: 'btn sm', onclick: () => { snapshot(); const miss = pending.filter((x) => !accept(x)).length; if (miss) toast(`${miss} bullet${miss === 1 ? '' : 's'} no longer exist${miss === 1 ? 's' : ''}, skipped.`, true); renderForm(); renderSugs(); touch(true); } }, 'Accept all')));
+      pending.length > 1 && h('button', { class: 'btn sm', onclick: () => { snapshot(); const miss = pending.filter((x) => !accept(x)).length; flashId = (pending.find((x) => x.status === 'accepted') || {}).bulletId || null; if (miss) toast(`${miss} bullet${miss === 1 ? '' : 's'} no longer exist${miss === 1 ? 's' : ''}, skipped.`, true); renderForm(); renderSugs(); touch(true); } }, 'Accept all')));
     for (const sg of pending) {
       sugHost.append(h('div', { class: 'sug' },
         h('ins', null, sg.proposed),
@@ -162,7 +191,7 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
         h('div', { class: 'row', style: 'margin-top:10px;gap:6px' },
           h('button', { class: 'btn sm primary', onclick: () => {
             snapshot();
-            if (!accept(sg)) toast('That bullet no longer exists.', true);
+            if (!accept(sg)) toast('That bullet no longer exists.', true); else flashId = sg.bulletId;
             renderForm(); renderSugs(); touch(true);
           } }, 'Accept'),
           h('button', { class: 'btn sm ghost', onclick: () => { sg.status = 'rejected'; renderSugs(); touch(false); } }, 'Keep mine'))));
@@ -171,7 +200,7 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
 
   async function save(quiet) {
     status.textContent = 'Saving…';
-    try { await onSave(state, sugs); dirty = false; status.textContent = autosave ? 'All changes saved' : 'Saved'; if (!quiet) toast('Saved'); return true; }
+    try { await onSave(state, sugs); dirty = false; status.textContent = autosave ? 'All changes saved' : 'Saved'; status.classList.remove('busy'); status.classList.add('ok'); setTimeout(() => status.classList.remove('ok'), 1200); if (!quiet) toast('Saved'); return true; }
     catch (e) { status.textContent = 'Not saved'; toast(e.message, true); return false; }
   }
 
@@ -183,7 +212,7 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
         onDownload && h('button', { class: 'btn primary', onclick: async () => { if (dirty && !(await save(true))) return; await onDownload(); } }, 'Download PDF'))),
     h('div', { class: 'editor' },
       h('div', null, intro, h('div', { class: 'card sugcard' }, sugHost), formHost),
-      h('div', { class: 'preview' }, h('div', { class: 'phead' }, h('b', null, 'Live preview'), h('span', { class: 'muted small' }, 'Exactly what the PDF will look like')), pane)));
+      h('div', { class: 'preview' }, h('div', { class: 'phead' }, h('b', null, h('span', { class: 'livedot' }), 'Live preview'), legend, h('span', { class: 'muted small' }, 'Green highlights are preview only, not in the PDF')), pane)));
 
   renderForm(); renderSugs(); refreshPreview(); queueMicrotask(fit);
   sugHost.parentElement.hidden = !sugs.length && !autosave;

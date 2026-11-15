@@ -1,7 +1,7 @@
 import { h, toast, clear } from './dom.js';
 import { api } from './api.js';
 import { icon } from './icons.js';
-import { pageHead, emptyState, nextStep, logoMark, sourceName } from './ui.js';
+import { pageHead, emptyState, nextStep, logoMark, sourceName, ago, exact, isFresh } from './ui.js';
 
 export const STATUS_LABEL = { saved: 'Saved', applied: 'Applied', screening: 'Screening call', interview: 'Interview', offer: 'Offer', rejected: 'Rejected' };
 export const bandOf = (m) => m?.band || 'unknown';
@@ -115,6 +115,8 @@ export async function trackingView(me, go) {
   const move = async (id, st) => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { status: st } }); toast(`Moved to ${STATUS_LABEL[st]}`); go('#/tracking'); } catch (x) { toast(x.message, true); } };
   const visible = () => jobs.filter((j) => (stage === 'all' || j.status === stage) && (!q || `${j.title} ${j.company}`.toLowerCase().includes(q)));
 
+  // Saved date, plus when it was applied once it has been.
+  const when = (j) => j.appliedAt && j.status !== 'saved' ? `Applied ${ago(j.appliedAt)}` : `Saved ${ago(j.createdAt)}`;
   function board(list) {
     const el = h('div', { class: 'board' });
     for (const st of statuses) {
@@ -122,10 +124,11 @@ export async function trackingView(me, go) {
         ondragover: (e) => { e.preventDefault(); col.classList.add('over'); }, ondragleave: () => col.classList.remove('over'),
         ondrop: (e) => { e.preventDefault(); col.classList.remove('over'); const id = e.dataTransfer.getData('text/plain'); const job = jobs.find((j) => String(j.id) === id); if (job && job.status !== st) move(id, st); } },
         h('h3', null, h('span', null, STATUS_LABEL[st]), h('b', null, list.filter((j) => j.status === st).length)));
-      for (const j of list.filter((x) => x.status === st)) {
-        col.append(h('a', { class: 'jcard', href: `#/job/${j.id}`, draggable: true, ondragstart: (e) => e.dataTransfer.setData('text/plain', String(j.id)) },
+      for (const [ci, j] of list.filter((x) => x.status === st).entries()) {
+        col.append(h('a', { class: 'jcard', style: `--i:${Math.min(ci, 8)}`, href: `#/job/${j.id}`, draggable: true, ondragstart: (e) => e.dataTransfer.setData('text/plain', String(j.id)) },
           h('div', { class: 'row between', style: 'gap:8px;flex-wrap:nowrap;align-items:flex-start' }, h('div', { class: 'row', style: 'gap:10px;flex-wrap:nowrap;align-items:flex-start' }, logoMark(j, 32), h('div', { class: 't' }, j.title || 'Untitled role')), scorePill(j.match)),
-          h('div', { class: 'c' }, j.company || 'Company not detected', sourceName(j) ? h('span', { class: 'faint' }, ` · ${sourceName(j)}`) : null)));
+          h('div', { class: 'c' }, j.company || 'Company not detected', sourceName(j) ? h('span', { class: 'faint' }, ` · ${sourceName(j)}`) : null),
+          h('div', { class: 'when', title: `Saved ${exact(j.createdAt)}` }, isFresh(j.createdAt) && h('span', { class: 'newdot' }, 'New'), when(j))));
       }
       el.append(col);
     }
@@ -135,10 +138,11 @@ export async function trackingView(me, go) {
   function table(list) {
     if (!list.length) return h('div', { class: 'card empty' }, h('p', { class: 'muted', style: 'margin:0' }, 'No jobs match.'));
     return h('div', { class: 'card flush', style: 'overflow-x:auto' }, h('table', { class: 't' },
-      h('thead', null, h('tr', null, ['Role', 'Fit', 'Stage'].map((x) => h('th', null, x)))),
+      h('thead', null, h('tr', null, ['Role', 'Fit', 'Saved', 'Stage'].map((x) => h('th', null, x)))),
       h('tbody', null, list.map((j) => h('tr', { onclick: (e) => { if (!e.target.closest('select')) location.hash = `#/job/${j.id}`; } },
         h('td', null, h('div', { class: 'row', style: 'gap:12px;flex-wrap:nowrap' }, logoMark(j, 36), h('div', null, h('div', { style: 'font-weight:600' }, j.title || 'Untitled role'), h('div', { class: 'muted small' }, j.company || 'Company not detected', sourceName(j) ? ` · ${sourceName(j)}` : '')))),
         h('td', null, scorePill(j.match)),
+        h('td', { class: 'small muted', title: exact(j.createdAt), style: 'white-space:nowrap' }, isFresh(j.createdAt) && h('span', { class: 'newdot' }, 'New'), ago(j.createdAt)),
         h('td', null, h('select', { 'aria-label': 'Stage', onchange: (e) => move(j.id, e.target.value) }, statuses.map((s) => h('option', { value: s, selected: s === j.status }, STATUS_LABEL[s])))))))));
   }
 

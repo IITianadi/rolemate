@@ -39,7 +39,8 @@ export function renderInline(md, { highlight = true } = {}) {
   return out + plain(src.slice(last));
 }
 
-export function renderHtml(resume, { fontCss = '' } = {}) {
+// marks: bullet ids to highlight in the dashboard preview only (accepted rewordings, edits). Never used for the PDF.
+export function renderHtml(resume, { fontCss = '', marks = null } = {}) {
   const st = resume.structure || {};
   const upper = st.headingCase === 'upper';
   const align = st.headerAlign === 'left' ? 'left' : 'center';
@@ -54,9 +55,10 @@ export function renderHtml(resume, { fontCss = '' } = {}) {
   const bulletBlock = (b) => {
     const pad = Math.max(0, Number(b.indent) || 0);
     const text = renderInline(b.text);
-    if (b.style === 'text') return `<div class="tx" style="margin-left:${pad}pt">${text}</div>`;
-    if (b.style === 'sub') return `<div class="sub" style="margin-left:${pad}pt"><i>${text}</i></div>`;
-    return `<div class="li" style="margin-left:${pad}pt">${text}</div>`;
+    const mk = marks && b.id && marks.has(b.id) ? ` chg" data-b="${esc(b.id)}` : '';
+    if (b.style === 'text') return `<div class="tx${mk}" style="margin-left:${pad}pt">${text}</div>`;
+    if (b.style === 'sub') return `<div class="sub${mk}" style="margin-left:${pad}pt"><i>${text}</i></div>`;
+    return `<div class="li${mk}" style="margin-left:${pad}pt">${text}</div>`;
   };
 
   const sectionHtml = resume.sections.map((s) => {
@@ -102,6 +104,7 @@ p{margin:0 0 3pt}
 .li{padding-left:${hang.toFixed(1)}pt;text-indent:-${hang.toFixed(1)}pt}
 .li::before{content:"${bullet}";display:inline-block;width:${hang.toFixed(1)}pt;text-indent:0;font-size:${fs * 0.8}pt;vertical-align:1pt}
 b{font-weight:700}
+${marks ? '.chg{background:#dff3e8;box-shadow:0 0 0 2pt #dff3e8;border-radius:2pt}.chg.flash{animation:fl 1.6s ease-out}@keyframes fl{0%{background:#9fe0bd;box-shadow:0 0 0 4pt #9fe0bd}100%{background:#dff3e8;box-shadow:0 0 0 2pt #dff3e8}}' : ''}
 </style></head><body><header><h1>${esc(resume.header.name)}</h1>${(resume.header.lines || []).map((l) => `<p>${esc(l)}</p>`).join('')}</header>${sectionHtml}</body></html>`;
 }
 
