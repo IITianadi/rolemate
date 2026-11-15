@@ -170,9 +170,16 @@ function extractPage() {
     if (ic) out.logo = httpUrl(ic.getAttribute('href'));
   }
 
+  // Some pages (LinkedIn posts among them) render text inside shadow DOM, which innerText of the page does not include.
+  const shadowText = (rootNode) => {
+    let t = '';
+    for (const e of rootNode.querySelectorAll('*')) if (e.shadowRoot) { for (const c of e.shadowRoot.children) t += '\n' + (c.innerText || ''); t += shadowText(e.shadowRoot); }
+    return t;
+  };
   if (!out.text) {
     const body = q(['main', '[role="main"]', 'article']);
     out.text = clean((body || document.body).innerText);
+    if (out.text.length < 300) out.text = clean(`${document.body.innerText || ''}\n${shadowText(document)}`);
   } else if (descNode) {
     // A description rarely repeats the job title or company; add what the panel says so they travel with the text.
     const head = [paneTitle, cc.find((c) => c.source === 'link')?.name].filter(Boolean).join('\n');
@@ -240,7 +247,14 @@ async function capture(tab, site) {
   const steps = loading(['Reading the job post', 'Matching it to your resume', 'Tailoring your resume']);
   let page;
   try {
-    [{ result: page }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractPage });
+    // Read every frame on the tab (some sites show the post inside a frame) and keep the one with the most text.
+    let runs;
+    try { runs = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func: extractPage }); }
+    catch { runs = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractPage }); }
+    const pages = runs.map((r) => r && r.result).filter(Boolean);
+    const top = (runs.find((r) => r && r.frameId === 0) || {}).result;
+    page = top && (top.selection || top.text.length >= 300) ? top : pages.sort((a, b) => b.text.length - a.text.length)[0] || top;
+    if (page && top && page !== top) { page.url = top.url; page.source = top.source; page.externalId = page.externalId || top.externalId; }
   } catch {
     return show(message('stop', 'Can’t read this page', 'Chrome doesn’t let extensions read this page. Reload it and try again.', tryAgain()), await footer());
   }
@@ -248,7 +262,7 @@ async function capture(tab, site) {
     return show(message('info', 'Open a single job post', `This ${site.name} page isn’t one job. Click a job so its full description is open, then click Rolemate again.`,
       el('p', { class: 'hint' }, 'Tip: you can also select the job’s text on the page, then capture.'), tryAgain()), await footer());
   }
-  if (page.text.length < 200) {
+  if (page.text.length < 120) {
     return show(message('stop', 'Couldn’t find the job description', 'Scroll until the description is visible, or select its text, then click Rolemate again.', tryAgain()), await footer());
   }
   steps.next();
