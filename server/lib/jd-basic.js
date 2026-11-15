@@ -30,9 +30,9 @@ export function extractBasic(text, hints = {}) {
   }
   const yrs = parseYears(body);
   return {
-    title: hints.title || guessTitle(lines, body),
-    company: hints.company || guessCompany(body, lines),
-    location: hints.location || '',
+    title: hints.title || hiringPost(body).title || guessTitle(lines, body),
+    company: hints.company || hiringPost(body).company || guessCompany(body, lines),
+    location: hints.location || guessLocation(body),
     mustHave: [...must],
     niceToHave: [...nice],
     anyOf: anyOf.filter((g) => g.every((x) => must.has(x) || nice.has(x))),
@@ -69,6 +69,19 @@ export function parseYears(text) {
 
 const ROLE_WORD = /\b(engineer|developer|manager|analyst|designer|executive|associate|intern|lead|consultant|specialist|architect|scientist|officer|administrator|recruiter|writer|marketer|accountant|representative|tester|head|director|coordinator|supervisor|technician|assistant|strategist|advisor|trainee)\b/i;
 
+// LinkedIn hiring posts: "Airtel Payments Bank is hiring a Product Manager – Lending to join our Gurgaon office!"
+const HIRING = /(?:^|[\n.!🚀📢✨🔥]\s*)([A-Z][\w&.'’\- ]{1,50}?)\s+(?:is|are)\s+(?:now\s+)?(?:hiring|looking for)\s*(?:an?\s+|for\s+(?:an?\s+)?)?([A-Z][\w/&+.'’\- –—]{2,70}?)(?=\s*(?:\(|\bto\b|\bat\b|\bin\b|\bfor\b|\bwith\b|\bwho\b|[,.!|:\n]|$))/;
+export function hiringPost(body) {
+  const m = String(body || '').slice(0, 1500).match(HIRING);
+  if (!m || !ROLE_WORD.test(m[2]) || /^(we|i|our team|my team|they|he|she)$/i.test(m[1].trim())) return { title: '', company: '' };
+  return { title: m[2].trim().replace(/\s*[–—-]\s*$/, ''), company: m[1].trim() };
+}
+// "join our Gurgaon office", "based in Bengaluru", "Location: Pune"
+function guessLocation(body) {
+  const m = String(body || '').slice(0, 3000).match(/(?:join our|based (?:in|out of)|located in|location\s*[:\-–]|office in)\s+([A-Z][a-zA-Z]+(?:[ ,]+[A-Z][a-zA-Z]+){0,2})/);
+  return m ? m[1].replace(/\s+(office|team|hub)$/i, '').trim() : '';
+}
+
 function guessTitle(lines, body) {
   // Hiring posts: "We're hiring! Product Analyst (2-4 years) at …"
   const m = body.match(/\b(?:hiring|looking for|opening for|vacancy for|openings? for|role of|position of|role|position)\s*[:!\-–]?\s*(?:an?\s+)?([A-Z][\w/&+.\- ]{3,50}?)(?=\s*(?:\(|\bat\b|\bin\b|\bfor\b|[,.!|:\n]|$))/);
@@ -82,7 +95,7 @@ const NOT_COMPANY = /\b(requirements?|responsibilit|qualifications?|about|apply|
 
 // "at Acme Corp" in running text, else a short capitalised line right next to the title ("Nike" under "Product Manager").
 function guessCompany(body, lines = []) {
-  const m = body.match(/\bat[ \t]+((?:[A-Z][\w&.\-]*)(?:[ \t]+(?:[A-Z][\w&.\-]*|&)){0,3})/);
+  const m = body.match(/\bat[ \t]+((?:[A-Z][\w&.\-]*)(?:[ \t]+(?:[A-Z][\w&.\-]*|&)){0,3})(?![\w.\-]*@)/);
   if (m) return m[1].trim().replace(/[.,]$/, '');
   const t = lines.findIndex((l) => l.length <= 90 && ROLE_WORD.test(l));
   for (const i of [t + 1, t - 1]) {
@@ -96,7 +109,7 @@ function guessCompany(body, lines = []) {
 // ---- Page scraping can pick up the wrong element (a card in a job list, site chrome, a stale heading).
 // A title is only trusted if it is actually about the text we captured.
 const JUNK_PREFIX = /^(selected|viewed|saved|new|promoted|verified|actively recruiting|easy apply)[,:]\s*/i;
-const SITE_CHROME = /^(linkedin|jobs?|job search|home|feed|search|notifications|messaging|naukri(\.com)?|indeed|glassdoor|careers?|apply|menu|about the job|about us|about the role|job description|description|overview|requirements?|responsibilit\w*|qualifications?|skills?|\(\d+\).*)$/i;
+const SITE_CHROME = /^(linkedin|jobs?|job search|home|feed|feed detail update|post|posts|search|\(?\d*\)?\s*notifications?|messaging|naukri(\.com)?|indeed|glassdoor|careers?|apply|menu|about the job|about us|about the role|job description|description|overview|requirements?|responsibilit\w*|qualifications?|skills?|\(\d+\).*)$/i;
 export const cleanTitle = (t) => String(t || '').replace(/\s+/g, ' ').replace(JUNK_PREFIX, '').trim().slice(0, 120);
 const wordSet = (t) => new Set(String(t).toLowerCase().replace(/[^a-z0-9+#]+/g, ' ').split(/\s+/).filter(Boolean));
 

@@ -96,10 +96,13 @@ function extractPage() {
 
   // The job description container (class names used by LinkedIn, Naukri and common job pages). Used on any site.
   const DESC = ['.jobs-description__content', '.jobs-box__html-content', '#job-details', '.feed-shared-update-v2__description', '.update-components-text', '.styles_job-desc-container__txpYf', '[class*="job-desc"]', '[class*="JDC"]', '[class*="job-description"]', '[class*="jobDescription"]', '[id*="job-description"]', '[id*="jobDescription"]'];
-  const descNode = q(DESC);
+  // LinkedIn posts (feed/update, posts): the post's own text box. LinkedIn has shipped several layouts, so try each.
+  const isPost = /(^|\.)linkedin\.com$/.test(host) && /\/(feed\/update|posts)\//.test(location.pathname);
+  const POST = ['.feed-shared-update-v2__description', '[data-test-id="main-feed-activity-card__commentary"]', '.update-components-update-v2__commentary', '.feed-shared-inline-show-more-text', '.update-components-text', '[class*="commentary"]'];
+  const descNode = isPost ? (q(POST) || q(DESC)) : q(DESC);
   if (/linkedin\.com$/.test(host) && /\/jobs\//.test(location.pathname)) out.title = out.title || text1(['.job-details-jobs-unified-top-card__job-title h1', '.jobs-unified-top-card__job-title', 'h1']);
   if (/naukri\.com$/.test(host)) out.title = out.title || text1(['h1']);
-  if (descNode && clean(descNode.innerText).length >= 150) out.text = clean(descNode.innerText);
+  if (descNode && clean(descNode.innerText).length >= (isPost ? 80 : 150)) out.text = clean(descNode.innerText);
 
   // Company candidates (the server verifies and picks): the company link in the SAME panel as the description,
   // page metadata, the page title and the site address. A card elsewhere in a job list is never used.
@@ -129,7 +132,8 @@ function extractPage() {
       if (links.length || hdText.length >= 3) {
         // Prefer a link with visible text; a logo-only link falls back to its alt text ("Acme logo" is cleaned by the server).
         for (const l of [...links].sort((a, b) => (b.innerText.trim() ? 1 : 0) - (a.innerText.trim() ? 1 : 0)).slice(0, 4)) addCo(l.innerText || l.getAttribute('aria-label') || (l.querySelector('img') && l.querySelector('img').alt), 'link');
-        paneTitle = hdText; panel = a;
+        // Hidden page headings ("0 notifications", "Feed detail update") are not the job's title.
+        paneTitle = isPost || /notification|feed|^post$|messaging/i.test(hdText) ? '' : hdText; panel = a;
         break;
       }
     }

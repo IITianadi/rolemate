@@ -57,3 +57,22 @@ test('company on its own line next to the title is found; role/section lines are
   assert.equal(extractBasic('Nike · Bengaluru\nProduct Manager\nRequirements\n- SQL').company, 'Nike');
   assert.equal(extractBasic('Product Manager\nRequirements\n- SQL and Excel').company, '');
 });
+
+test('LinkedIn hiring post "X is hiring a Y to join our Z office": title, company, location; an email is not a company', () => {
+  const post = `Airtel Payments Bank is hiring a Product Manager – Lending to join our Gurgaon office!
+We are looking for an experienced Product Manager to own our digital lending products.
+✅ 2–5 years of experience in Product Management within Banking or Fintech.
+✅ Familiarity with APIs, Excel, SQL, JIRA, Agile/Scrum.
+If this sounds like you, share your profile at Kanika.Pal@airtelbank.com.`;
+  const j = extractBasic(`0 notifications\n\n${post}`);
+  assert.equal(j.title, 'Product Manager – Lending');
+  assert.equal(j.company, 'Airtel Payments Bank');
+  assert.equal(j.location, 'Gurgaon');
+  assert.equal(j.minYears, 2);
+  assert.ok(j.mustHave.includes('SQL'));
+});
+
+test('page chrome is never a title: "0 notifications", "Feed detail update"', async () => {
+  const { pickTitle } = await import('../server/lib/jd.js');
+  assert.equal(pickTitle(['0 notifications', '(3) notifications', 'Feed detail update', 'Post'], '0 notifications Feed detail update Post hiring a Product Manager'), '');
+});
