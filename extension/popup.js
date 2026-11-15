@@ -1,34 +1,58 @@
-// Capture runs only when the user clicks the button; the page text is read from the active tab
-// (activeTab permission) and sent to the user's own Rolemate server.
+// Rolemate popup. Capture runs only when the user clicks: the job page is read from the active tab (activeTab
+// permission) and sent to the user's own Rolemate account. Only job posts on supported sites (sites.js) are captured.
 'use strict';
 
-const DEFAULT_SERVER = 'https://app.rolemate.in';
+const SERVER = 'https://app.rolemate.in';
 const root = document.getElementById('root');
 const store = {
-  // The server is fixed: the extension only ever talks to Rolemate.
-  get: async () => ({ ...(await chrome.storage.local.get({ token: '', email: '' })), server: DEFAULT_SERVER }),
+  get: () => chrome.storage.local.get({ token: '', email: '' }),
   set: (v) => chrome.storage.local.set(v),
 };
+const openTab = (path) => chrome.tabs.create({ url: SERVER + path });
 
 function el(tag, props = {}, ...kids) {
   const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
+  for (const [k, v] of Object.entries(props || {})) {
     if (v === false || v == null) continue;
     if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'value') e.value = v; else e.setAttribute(k, v);
   }
   for (const kid of kids.flat()) if (kid !== false && kid != null) e.append(kid instanceof Node ? kid : document.createTextNode(kid));
   return e;
 }
-const show = (...nodes) => { root.replaceChildren(el('div', { class: 'wrap' }, el('div', { class: 'brand' }, 'Rolemate'), ...nodes)); };
+const svg = (markup) => { const t = document.createElement('template'); t.innerHTML = markup.trim(); return t.content.firstChild; };
+
+// The Rolemate mark: two squares that come together, then the check is drawn. `loop` keeps it playing while we work.
+const MARK = (loop) => svg(`<svg class="mark ${loop ? 'loop' : ''}" viewBox="0 0 72 72" aria-hidden="true">
+  <g transform="translate(4 4)"><rect class="sq1" x="6" y="6" width="36" height="36" rx="11" fill="#1D1D1F"/><rect class="sq2" x="22" y="22" width="36" height="36" rx="11" fill="#2F6BFF"/>
+  <clipPath id="mk-c"><rect x="6" y="6" width="36" height="36" rx="11"/></clipPath><g clip-path="url(#mk-c)"><rect class="ov" x="22" y="22" width="36" height="36" rx="11" fill="#fff"/></g>
+  <path class="ck" pathLength="1" d="M27 33.5L31.6 38L38.4 29.5" fill="none" stroke="#2F6BFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`);
+
+let credits = null; // from /api/me, shown in the footer
+function show(...nodes) {
+  root.replaceChildren(
+    el('header', {}, el('div', { class: 'brand' }, MARK(false), el('span', {}, 'role', el('b', {}, 'mate')))),
+    el('main', {}, ...nodes));
+}
+const footer = async () => {
+  const { email } = await store.get();
+  return el('footer', {},
+    el('button', { class: 'link', onclick: () => openTab('/#/tracking') }, 'Open dashboard'),
+    el('span', { class: 'muted' }, credits != null ? `${credits} credit${credits === 1 ? '' : 's'} left` : ''),
+    email && el('button', { class: 'link', title: email, onclick: () => signIn('', true) }, 'Account'));
+};
+// A titled message: icon state, a one-line title, and what to do next.
+const message = (kind, title, text, ...actions) => el('section', { class: `msg ${kind}` },
+  el('div', { class: 'dot' }, kind === 'ok' ? '✓' : kind === 'stop' ? '!' : 'i'),
+  el('h1', {}, title), text && el('p', {}, text), ...actions);
 
 async function callApi(path, { method = 'GET', body } = {}) {
-  const { server, token } = await store.get();
+  const { token } = await store.get();
   let res;
   try {
-    res = await fetch(server.replace(/\/$/, '') + path, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
-  } catch { throw Object.assign(new Error(`Can't reach Rolemate right now. Check your internet connection and try again.`), { network: true }); }
+    res = await fetch(SERVER + path, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  } catch { throw Object.assign(new Error('Can’t reach Rolemate. Check your internet connection and try again.'), { network: true }); }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status, data });
+  if (!res.ok) throw Object.assign(new Error(data.error || `Something went wrong (${res.status}). Try again.`), { status: res.status, data });
   return data;
 }
 
@@ -168,109 +192,175 @@ function extractPage() {
   out.titleCandidates = [...new Set(cands.map((c) => String(c || '').trim()).filter((c) => c.length >= 3 && c.length <= 120))].slice(0, 12);
   out.title = out.titleTrusted ? out.title : '';
   out.text = out.text.slice(0, 40000);
+  out.isJobPosting = !!ld;
   delete out.jsonld;
   return out;
 }
 
-async function capture(btn) {
-  btn.disabled = true; btn.textContent = 'Reading this page…';
+
+// ---------- Screens
+
+const sitesList = () => el('details', { class: 'sites' }, el('summary', {}, `See all ${SITES.length} supported sites`),
+  el('p', {}, SITES.map((s) => s.name).join(', ') + '.'));
+
+async function home() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const f = await footer();
+  if (!tab || !/^https?:/.test(tab.url || '')) {
+    return show(message('info', 'Open a job post first', 'Go to LinkedIn, Naukri or another job site, open a job, then click Rolemate.'), sitesList(), f);
+  }
+  const site = findSite(tab.url);
+  if (!site) {
+    return show(message('stop', 'This site isn’t supported yet', `Rolemate captures jobs from ${SITES.length} job sites and career pages, like LinkedIn, Naukri and Indeed.`,
+      el('button', { class: 'btn', onclick: () => openTab('/#/tracking/add') }, 'Paste the job in Rolemate instead')), sitesList(), f);
+  }
+  const title = String(tab.title || '').replace(/\s*[|–-]\s*(LinkedIn|Naukri\.com|Indeed\.com|Glassdoor|foundit).*$/i, '').trim();
+  show(el('section', { class: 'ready' },
+    el('span', { class: 'tag' }, el('i'), site.isJobUrl ? `${site.name} job` : site.name),
+    el('h1', {}, site.isJobUrl ? 'Ready to capture' : 'Open the job you want'),
+    site.isJobUrl && title && el('p', { class: 'jobline' }, title),
+    el('p', {}, site.isJobUrl ? 'Rolemate saves this job, scores how well you match, and tailors your resume to it.' : `Click a job on ${site.name} so its full description is open, then capture it.`),
+    el('button', { class: 'btn primary', onclick: () => capture(tab, site) }, 'Capture this job'),
+    el('p', { class: 'hint' }, 'Uses 1 credit for each new job.')), f);
+}
+
+// Loading: the logo plays on a loop while each step is named. Steps advance as the work does.
+function loading(steps) {
+  let i = 0;
+  const label = el('p', { class: 'step' }, steps[0] + '…');
+  const list = el('ol', { class: 'steps' }, steps.map((s, k) => el('li', { class: k === 0 ? 'now' : '' }, s)));
+  root.replaceChildren(el('main', { class: 'loading' }, MARK(true), label, list));
+  const set = (n) => { i = Math.min(n, steps.length); [...list.children].forEach((li, k) => { li.className = k < i ? 'done' : k === i ? 'now' : ''; }); if (i < steps.length) label.textContent = steps[i] + '…'; };
+  return { next: () => set(i + 1), done: () => set(steps.length) };
+}
+
+const tryAgain = () => el('button', { class: 'btn', onclick: home }, 'Try again');
+
+async function capture(tab, site) {
+  const steps = loading(['Reading the job post', 'Matching it to your resume', 'Tailoring your resume']);
+  let page;
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !/^https?:/.test(tab.url || '')) throw new Error('Open a job page or LinkedIn post first, then click the extension.');
-    const [{ result: page }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractPage });
-    if (!page || page.text.length < 80) throw new Error('Not enough text found. Select the job description on the page and try again.');
-    btn.textContent = 'Matching to your resume…';
+    [{ result: page }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractPage });
+  } catch {
+    return show(message('stop', 'Can’t read this page', 'Chrome doesn’t let extensions read this page. Reload it and try again.', tryAgain()), await footer());
+  }
+  if (!page || !(site.isJobUrl || page.isJobPosting || page.selection)) {
+    return show(message('info', 'Open a single job post', `This ${site.name} page isn’t one job. Click a job so its full description is open, then click Rolemate again.`,
+      el('p', { class: 'hint' }, 'Tip: you can also select the job’s text on the page, then capture.'), tryAgain()), await footer());
+  }
+  if (page.text.length < 200) {
+    return show(message('stop', 'Couldn’t find the job description', 'Scroll until the description is visible, or select its text, then click Rolemate again.', tryAgain()), await footer());
+  }
+  steps.next();
+  const later = setTimeout(steps.next, 1800);
+  try {
     const res = await callApi('/api/capture', { method: 'POST', body: { url: page.url, externalId: page.externalId, source: page.source, text: page.text, hints: { title: page.title, titleTrusted: page.titleTrusted && !page.selection, titleCandidates: page.titleCandidates, company: page.company, companyTrusted: !!page.companyTrusted, companyCandidates: page.companyCandidates, location: page.location, logo: page.logo, companyDomain: page.companyDomain, logoAlt: page.logoAlt, logoHow: page.logoHow } } });
-    await showResult(res);
+    clearTimeout(later); steps.done();
+    await result(res);
   } catch (e) {
-    if (e.status === 401) return loginScreen('Please sign in again.');
-    if (e.status === 409) return needResume(e.message);
-    await home(e.message);
+    clearTimeout(later);
+    if (e.status === 401) return signIn('Your session ended. Please sign in again.');
+    if (e.status === 409) return needResume();
+    show(message('stop', e.status === 422 ? 'Couldn’t read this job' : 'Something went wrong', e.message, tryAgain()), await footer());
   }
 }
 
-async function showResult({ job, resumeId, quotaExceeded, quota, existing }) {
+function ring(score, color) {
+  const n = el('b', {}, '0');
+  const r = el('div', { class: 'ring', style: `--c:${color};--p:0` }, n);
+  const t0 = performance.now();
+  const tick = (t) => { const k = Math.min(1, (t - t0) / 900); const v = Math.round(score * (1 - Math.pow(1 - k, 3))); n.textContent = v; r.style.setProperty('--p', v); if (k < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+  return r;
+}
+
+async function result({ job, resumeId, quotaExceeded, quota, existing }) {
+  if (quota && quota.remaining != null) credits = quota.remaining;
   const m = job.match || {};
-  const color = m.band === 'strong' ? 'var(--good)' : m.band === 'partial' ? '#d9921a' : 'var(--bad)';
-  const { server } = await store.get();
-  const base = server.replace(/\/$/, '');
-  const must = m.missingMust || []; const nice = m.missingNice || [];
+  const color = m.band === 'strong' ? '#1fb57a' : m.band === 'partial' ? '#2f6bff' : '#f5a623';
+  const missing = m.missingMust || []; const have = (m.matchedMust || []).length; const req = have + missing.length;
+  const openJob = () => openTab(`/#/job/${job.id}`);
+  const dl = el('button', { class: 'btn primary', onclick: async () => {
+    dl.disabled = true; dl.textContent = 'Preparing your PDF…';
+    try { await downloadPdf(resumeId); dl.textContent = 'Downloaded ✓'; next.hidden = false; }
+    catch (x) { dl.disabled = false; dl.textContent = 'Download tailored resume'; next.textContent = x.message; next.hidden = false; }
+  } }, 'Download tailored resume');
+  const next = el('p', { class: 'hint', hidden: true }, 'Next: apply on the job site, then mark it as applied in your dashboard.');
   show(
-    el('h1', { style: 'margin-top:10px' }, existing ? 'Updated in your tracker' : 'Saved to your tracker'),
-    el('div', {}, el('div', { class: 'title' }, job.title || 'Untitled role'), el('div', { class: 'muted small' }, [job.company, job.location].filter(Boolean).join(' · ') || 'Company not detected'), el('div', { class: 'small muted', style: 'margin-top:2px' }, 'Wrong title or company? Edit it in the dashboard.')),
-    el('div', { class: 'score' }, el('div', { class: 'ring', style: `--p:${m.score ?? 0};--c:${color}` }, el('i', {}, m.score == null ? '–' : String(m.score))),
-      el('div', {}, el('strong', {}, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match' }[m.band] || 'No clear requirements'), el('div', { class: 'muted small' }, 'Match vs this job description'))),
-    must.length > 0 && el('div', {}, el('div', { class: 'small muted' }, 'Required, missing from your resume'), el('div', { class: 'chips' }, must.slice(0, 6).map((s) => el('span', { class: 'chip' }, s)))),
-    nice.length > 0 && el('div', { style: 'margin-top:8px' }, el('div', { class: 'small muted' }, 'Nice to have, missing'), el('div', { class: 'chips' }, nice.slice(0, 5).map((s) => el('span', { class: 'chip nice' }, s)))),
-    !must.length && !nice.length && m.score != null && el('div', { class: 'chips' }, el('span', { class: 'chip ok' }, 'Resume covers all requirements')),
-    quotaExceeded && el('div', { class: 'note' }, `You've used all ${quota.limit} free tailored resumes this month. The job is saved and scored.`),
-    resumeId && el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Preparing PDF…'; try { await downloadPdf(resumeId); e.target.textContent = 'Downloaded ✓'; } catch (x) { e.target.textContent = 'Download tailored PDF'; e.target.disabled = false; alert(x.message); } } }, 'Download tailored PDF'),
-    el('button', { class: 'btn', onclick: () => chrome.tabs.create({ url: `${base}/#/job/${job.id}` }) }, must.length ? 'Review gaps & edit in dashboard' : 'Open in dashboard'),
-    quota && quota.limit != null && el('div', { class: 'small muted', style: 'margin-top:8px' }, `${quota.used}/${quota.limit} free tailored resumes used this month`));
+    el('div', { class: 'okline' }, el('i', {}, '✓'), existing ? 'Updated in your dashboard' : 'Saved to your dashboard'),
+    el('div', { class: 'job' }, el('div', { class: 'title' }, job.title || 'Untitled role'), el('div', { class: 'muted' }, [job.company, job.location].filter(Boolean).join(' · ') || 'Company not detected')),
+    m.score != null
+      ? el('div', { class: 'score' }, ring(m.score, color), el('div', {},
+        el('strong', {}, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match' }[m.band] || 'Match'),
+        el('div', { class: 'muted' }, req ? `Has ${have} of ${req} required skills` : 'Scored on experience and role')))
+      : el('p', { class: 'muted' }, 'No clear requirements found on this page, so there’s no score.'),
+    missing.length > 0 && el('div', { class: 'gaps' }, el('div', { class: 'label' }, 'Missing from your resume'),
+      el('div', { class: 'chips' }, missing.slice(0, 5).map((s) => el('span', { class: 'chip' }, s)), missing.length > 5 && el('span', { class: 'chip more' }, `+${missing.length - 5}`))),
+    quotaExceeded
+      ? message('stop', 'You’re out of credits', 'The job is saved and scored, but no resume was made. Buy credits to tailor it.',
+        el('button', { class: 'btn primary', onclick: () => openTab('/#/settings/billing') }, 'Buy credits'))
+      : resumeId && [dl, next],
+    el('button', { class: 'btn', onclick: openJob }, missing.length ? 'Review missing skills' : 'Open in dashboard'),
+    await footer());
 }
 
 async function downloadPdf(id) {
-  const { server, token } = await store.get();
-  const res = await fetch(`${server.replace(/\/$/, '')}/api/resumes/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error('Could not generate the PDF.');
+  const { token } = await store.get();
+  let res;
+  try { res = await fetch(`${SERVER}/api/resumes/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); } catch { throw new Error('Can’t reach Rolemate. Check your connection and try again.'); }
+  if (!res.ok) throw new Error('Couldn’t make the PDF. Try again, or download it from the dashboard.');
   const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] || 'resume.pdf';
   const url = URL.createObjectURL(await res.blob());
   const a = el('a', { href: url, download: name }); document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-async function needResume(msg) {
-  const { server } = await store.get();
-  show(el('h1', { style: 'margin-top:10px' }, 'One more step'), el('p', {}, msg), el('button', { class: 'btn primary', onclick: () => chrome.tabs.create({ url: server.replace(/\/$/, '') + '/#/welcome' }) }, 'Upload your resume'));
+function needResume() {
+  show(message('info', 'Upload your resume first', 'Rolemate tailors your own resume to each job. Upload it once in the dashboard, then capture this job again.',
+    el('button', { class: 'btn primary', onclick: () => openTab('/#/welcome') }, 'Upload resume')));
 }
 
-async function home(errorMsg) {
-  const { email } = await store.get();
-  const btn = el('button', { class: 'btn primary', onclick: () => capture(btn) }, 'Capture this job');
-  show(
-    el('p', { class: 'muted', style: 'margin:8px 0' }, 'Open a job page or a LinkedIn hiring post, then capture it. Tip: select just the job text first if the page is cluttered.'),
-    errorMsg && el('div', { class: 'err' }, errorMsg),
-    btn,
-    el('div', { class: 'row', style: 'margin-top:8px' },
-      el('button', { class: 'btn link', style: 'width:auto', onclick: async () => chrome.tabs.create({ url: (await store.get()).server.replace(/\/$/, '') + '/#/tracking' }) }, 'Open dashboard'),
-      el('button', { class: 'btn link', style: 'width:auto', onclick: () => loginScreen('', true) }, email ? `${email} · switch` : 'Sign in')));
-}
-
-async function loginScreen(msg, keep) {
+async function signIn(msg, fromAccount) {
   const s = await store.get();
-  const email = el('input', { type: 'email', autocomplete: 'email', value: s.email });
-  const pass = el('input', { type: 'password', autocomplete: 'current-password' });
-  const err = el('div', { class: 'err', style: msg ? '' : 'display:none' }, msg || '');
+  const signedIn = fromAccount && s.token;
+  const email = el('input', { type: 'email', autocomplete: 'email', value: s.email, placeholder: 'you@example.com' });
+  const pass = el('input', { type: 'password', autocomplete: 'current-password', placeholder: 'Password' });
+  const err = el('p', { class: 'err', hidden: !msg }, msg || '');
   const btn = el('button', { class: 'btn primary', type: 'submit' }, 'Sign in');
+  const done = async (r) => { await store.set({ token: r.token, email: r.user.email }); await loadMe(); home(); };
   const form = el('form', { onsubmit: async (e) => {
-    e.preventDefault(); btn.disabled = true; err.style.display = 'none';
-    try {
-      const r = await callApi('/api/auth/login', { method: 'POST', body: { email: email.value, password: pass.value } });
-      await store.set({ token: r.token, email: r.user.email });
-      await home();
-    } catch (x) { err.textContent = x.message; err.style.display = ''; btn.disabled = false; }
-  } },
-    el('label', {}, 'Email (same as the dashboard)', email), el('label', {}, 'Password', pass),
-    err, btn,
-    el('button', { class: 'btn link', type: 'button', onclick: async () => chrome.tabs.create({ url: DEFAULT_SERVER + '/' }) }, 'No account yet? Sign up on the dashboard'));
-  // Google users have no password: they get a one-time code from Settings in the dashboard.
-  const code = el('input', { type: 'text', autocomplete: 'off', placeholder: 'XXXX-XXXX', maxlength: '9', style: 'text-transform:uppercase' });
-  const cerr = el('div', { class: 'err', style: 'display:none' });
+    e.preventDefault(); btn.disabled = true; btn.textContent = 'Signing in…'; err.hidden = true;
+    try { await done(await callApi('/api/auth/login', { method: 'POST', body: { email: email.value, password: pass.value } })); }
+    catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Sign in'; }
+  } }, el('label', {}, 'Email', email), el('label', {}, 'Password', pass), err, btn);
+  // Google accounts have no password: a one-time code from the dashboard's Settings signs the extension in.
+  const code = el('input', { type: 'text', autocomplete: 'off', placeholder: 'XXXX-XXXX', maxlength: '9', class: 'code' });
+  const cerr = el('p', { class: 'err', hidden: true });
   const cbtn = el('button', { class: 'btn', type: 'submit' }, 'Sign in with code');
   const codeForm = el('form', { onsubmit: async (e) => {
-    e.preventDefault(); cbtn.disabled = true; cerr.style.display = 'none';
-    try {
-      const r = await callApi('/api/auth/connect', { method: 'POST', body: { code: code.value } });
-      await store.set({ token: r.token, email: r.user.email });
-      await home();
-    } catch (x) { cerr.textContent = x.message; cerr.style.display = ''; cbtn.disabled = false; }
-  } }, el('label', {}, 'Signed up with Google? Use a code', code), cerr, cbtn,
-  el('button', { class: 'btn link', type: 'button', onclick: async () => chrome.tabs.create({ url: DEFAULT_SERVER + '/#/settings' }) }, 'Get a code in Settings'));
-  show(el('h1', { style: 'margin-top:10px' }, 'Sign in'), form, el('hr'), codeForm);
+    e.preventDefault(); cbtn.disabled = true; cerr.hidden = true;
+    try { await done(await callApi('/api/auth/connect', { method: 'POST', body: { code: code.value } })); }
+    catch (x) { cerr.textContent = x.message; cerr.hidden = false; cbtn.disabled = false; }
+  } }, el('p', { class: 'muted' }, 'Get a one-time code in the dashboard: Settings → Extension.'), code, cerr, cbtn,
+  el('button', { class: 'link', type: 'button', onclick: () => openTab('/#/settings/extension') }, 'Get a code'));
+  show(
+    signedIn && el('div', { class: 'acct' }, el('span', {}, 'Signed in as ', el('b', {}, s.email)),
+      el('button', { class: 'link', onclick: async () => { await store.set({ token: '', email: '' }); credits = null; signIn(); } }, 'Sign out')),
+    el('section', { class: 'signin' }, el('h1', {}, signedIn ? 'Switch account' : 'Sign in to Rolemate'),
+      el('p', { class: 'muted' }, 'Use the same account as your Rolemate dashboard.'), form,
+      el('details', { class: 'alt' }, el('summary', {}, 'Signed up with Google?'), codeForm),
+      el('p', { class: 'muted center' }, 'New to Rolemate? ', el('button', { class: 'link inline', onclick: () => openTab('/') }, 'Create a free account'))),
+    signedIn && el('button', { class: 'btn', onclick: home }, 'Back'));
+}
+
+async function loadMe() {
+  try { const me = await callApi('/api/me'); credits = me.quota && me.quota.remaining != null ? me.quota.remaining : null; return me; }
+  catch (e) { if (e.status === 401) throw e; return null; } // offline: carry on, capture will report it
 }
 
 (async () => {
   const { token } = await store.get();
-  if (!token) return loginScreen();
+  if (!token) return signIn();
+  try { await loadMe(); } catch { return signIn('Your session ended. Please sign in again.'); }
   home();
 })();

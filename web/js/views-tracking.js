@@ -83,6 +83,8 @@ function checklist(me, jobs, go) {
 }
 
 export async function trackingView(me, go) {
+  // #/tracking/add (from the extension on an unsupported site): open the paste panel.
+  if (location.hash === '#/tracking/add') { wantAdd = true; history.replaceState(null, '', '#/tracking'); }
   const { jobs, statuses } = await api('/api/jobs');
   const host = h('div');
   const credits = me.quota?.remaining;
