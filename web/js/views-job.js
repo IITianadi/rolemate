@@ -27,22 +27,41 @@ export async function jobView(id, me, go) {
     catch (e) { toast(e.status === 402 ? 'You’ve used all your free resumes. Pay now to keep going.' : e.message, true); }
   }
 
+  const yrs = (y) => { const r = Math.round(y * 2) / 2; return r < 1 ? 'less than a year' : `${r} year${r === 1 ? '' : 's'}`; };
+  // The checks behind the score, in plain words: required skills, experience, past roles, nice-to-haves.
+  function reasons(m) {
+    const rq = job.requirements || {}; const out = [];
+    const has = m.matchedMust || []; const miss = m.missingMust || []; const req = has.length + miss.length;
+    if (req) out.push(miss.length ? [has.length / req >= 0.5 ? 'mid' : 'bad', `Has ${has.length} of ${req} required skills`, `Missing: ${miss.slice(0, 4).join(', ')}${miss.length > 4 ? ` and ${miss.length - 4} more` : ''}`] : ['ok', `Has all ${req} required skills`]);
+    if (rq.minYears != null) {
+      const ask = rq.maxYears ? `${rq.minYears}–${rq.maxYears}` : `${rq.minYears}+`;
+      const y = m.yearsExperience;
+      if (y == null) out.push(['mid', `Asks for ${ask} years of experience`, 'We couldn’t read the dates on your resume, so this wasn’t checked.']);
+      else if (y >= rq.minYears) out.push(['ok', `Asks for ${ask} years. You have about ${yrs(y)}.`]);
+      else out.push(['bad', `Asks for ${ask} years. You have about ${yrs(y)}.`, `About ${yrs(rq.minYears - y)} short. Strong, relevant projects can make up some of it.`]);
+    }
+    const t = (m.breakdown || []).find((b) => b.key === 'title');
+    if (t) out.push(t.points >= t.max ? ['ok', 'You’ve held a similar role before'] : t.points > 0 ? ['mid', 'Your past roles are partly similar'] : ['mid', 'None of your past titles look like this role', 'Fine for a switch. Make the summary say why you fit.']);
+    const nh = m.matchedNice || []; const nm = m.missingNice || [];
+    if (nh.length + nm.length) out.push([nm.length ? 'mid' : 'ok', `Has ${nh.length} of ${nh.length + nm.length} nice-to-have skills`]);
+    return out;
+  }
+
   // ---------- Fit & resume: the result first (score + tailored resume), then what to fix.
   function hero() {
     const m = job.match || {}; const r = latest(); const band = bandOf(m);
     const req = (m.matchedMust || []).length + (m.missingMust || []).length;
     const up = m.score != null && m.firstScore != null && m.score > m.firstScore;
+    // One number. Everything under it is a plain reason for that number, not another metric.
+    const verdict = { strong: 'Good fit. Worth applying.', partial: 'Close. Cover the gaps below if you can.', weak: 'Big gaps for this role. Apply only if you can cover them.' }[band];
     const left = h('div', null,
       h('div', { class: 'fit' }, m.score != null && ring(m.score),
         h('div', { class: 'words' }, h('h2', null, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match', unknown: 'No requirements found' }[band]),
-          h('p', null, m.score == null ? 'Paste the full description to score it.' : req ? `${(m.matchedMust || []).length} of ${req} required skills covered` : 'Scored on experience and role'),
+          h('p', null, m.score == null ? 'Paste the full description to score it.' : verdict),
           up && h('span', { class: 'delta' }, `↑ from ${m.firstScore}% when you saved it`))),
-      m.score != null && h('div', { class: 'target' }, h('b', null, m.score >= 75 ? 'Above 75%: a good fit to apply.' : '75% is a good target to apply.'),
-        h('div', { class: 'tbar' }, h('i', { style: `width:${m.score}%` }), h('u')), h('div', { class: 'row between' }, h('span', null, '0'), h('span', null, 'target 75'), h('span', null, '100'))),
-      (m.breakdown?.length > 0) && h('details', { style: 'margin-top:18px' }, h('summary', { class: 'small muted' }, 'How the score is built'),
-        h('div', { class: 'stack', style: 'margin-top:14px' }, m.breakdown.map((b) => h('div', null,
-          h('div', { class: 'row between small' }, h('strong', null, b.label), h('span', { class: 'muted' }, b.detail)),
-          h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': b.points, 'aria-valuemax': b.max }, h('i', { style: `width:${b.max ? Math.round((b.points / b.max) * 100) : 0}%` })))))));
+      m.score != null && h('div', { class: 'why' }, h('div', { class: 'label' }, `Why ${m.score}%`),
+        reasons(m).map(([kind, text, sub]) => h('div', { class: `reason ${kind}` }, h('i', { 'aria-hidden': 'true' }, kind === 'ok' ? '✓' : kind === 'bad' ? '✕' : '!'),
+          h('div', null, h('div', null, text), sub && h('div', { class: 'small muted' }, sub))))));
     const paper = h('div', { class: 'paper', 'aria-hidden': 'true' }, ['h', 'm', 's', 'c', 'm', 'c', 's', 'm', 'c', 's', 'm'].map((c) => h('i', { class: c })));
     const n = r ? (r.changes || []).length : 0;
     const right = h('div', { class: 'right' }, r
@@ -310,10 +329,11 @@ export async function jobView(id, me, go) {
     const meta = [job.company || 'Company not detected', job.location, savedAgo() && `Saved ${savedAgo()}`].filter(Boolean).join(' · ');
     append(host,
       h('div', { class: 'jobhead' }, logoMark(job, 56),
-        h('div', { class: 'grow', style: 'min-width:240px' }, h('h1', null, job.title || 'Untitled role'),
+        h('div', { class: 'grow', style: 'min-width:240px' }, h('div', { class: 'titlerow' }, h('h1', null, job.title || 'Untitled role'),
+            h('button', { class: `iconbtn ${editing ? 'on' : ''}`, title: editing ? 'Cancel editing' : 'Edit title, company, location', 'aria-label': 'Edit job details', onclick: () => { editing = !editing; draw(); } }, icon('pencil', 17)),
+            h('button', { class: 'iconbtn danger', title: 'Delete this job', 'aria-label': 'Delete job', onclick: async () => { if (!confirm(`Delete “${job.title || 'this job'}”? Its tailored resumes are deleted too.`)) return; await api(`/api/jobs/${id}`, { method: 'DELETE' }); toast('Deleted'); go('#/tracking'); } }, icon('trash', 17))),
           h('div', { class: 'meta' }, meta, job.url && [' · ', h('a', { href: job.url, target: '_blank', rel: 'noopener noreferrer' }, `Posted on ${sourceName(job)} ↗`)]),
-          h('div', { class: 'row', style: 'gap:2px;margin-top:4px' }, h('button', { class: 'btn sm ghost', onclick: () => { editing = !editing; draw(); } }, editing ? 'Cancel' : 'Edit details'),
-            h('button', { class: 'btn ghost danger sm', onclick: async () => { await api(`/api/jobs/${id}`, { method: 'DELETE' }); toast('Deleted'); go('#/tracking'); } }, 'Delete'))),
+          ),
         h('div', { class: 'acts' }, stage, job.status === 'saved' && h('button', { class: 'btn primary', onclick: () => move('applied') }, 'Mark as applied'))),
       editing && editForm(),
       next(),

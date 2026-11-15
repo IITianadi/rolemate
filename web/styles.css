@@ -261,3 +261,14 @@ table.t tbody tr { transition: background .2s; } table.t tbody tr:hover { backgr
 .accnew { font-size: 14px; line-height: 1.45; grid-column: 1; } .accwas { font-size: 12.5px; color: var(--muted); grid-column: 1; } .accwas del { color: var(--faint); }
 .accgo { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 13px; font-weight: 600; color: var(--primary); }
 .sug { animation: rise .35s var(--ease) both; }
+/* Job header: edit/delete as quiet icons beside the title */
+.titlerow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; } .titlerow h1 { margin-right: 8px; }
+.iconbtn { appearance: none; border: 0; background: transparent; color: var(--faint); width: 36px; height: 36px; border-radius: 50%; display: inline-grid; place-items: center; cursor: pointer; transition: background .2s, color .2s, transform .15s var(--ease); }
+.iconbtn:hover, .iconbtn.on { background: var(--sunken); color: var(--ink); } .iconbtn.danger:hover { background: var(--warn-bg); color: var(--bad); } .iconbtn:active { transform: scale(.92); }
+/* Fit: one score, then the reasons behind it */
+.why { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; } .why .label { margin-bottom: 4px; }
+.reason { display: flex; gap: 12px; align-items: flex-start; padding: 9px 0; font-size: 14.5px; line-height: 1.4; animation: rise .45s var(--ease) both; }
+.reason:nth-child(3) { animation-delay: .08s; } .reason:nth-child(4) { animation-delay: .16s; } .reason:nth-child(5) { animation-delay: .24s; }
+.reason > i { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 700; margin-top: 1px; }
+.reason.ok > i { background: var(--good-bg); color: var(--good); } .reason.mid > i { background: var(--warn-bg); color: var(--warn); } .reason.bad > i { background: #fde8e6; color: #c4321f; }
+.reason .small { margin-top: 2px; }
