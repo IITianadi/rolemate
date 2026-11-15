@@ -14,7 +14,7 @@ Developer account: https://chrome.google.com/webstore/devconsole (one-time $5 fe
 
 **Description:**
 Rolemate helps you apply with a resume that fits each job.
-Open a job on LinkedIn, Naukri or any company careers page, click the extension, and Rolemate saves the job to your dashboard, shows how well your resume matches, and prepares a tailored version of your resume in your own layout.
+Open a job on LinkedIn, Naukri, Indeed or one of 50 supported job sites and company career pages (Greenhouse, Lever, Workday, Darwinbox, Keka and more), click the extension, and Rolemate saves the job to your dashboard, shows how well your resume matches, and prepares a tailored version of your resume in your own layout.
 - Saves the job, company, logo and where it was posted
 - Match score and the skills you are missing
 - Tailored resume that keeps your layout and never adds experience you do not have
