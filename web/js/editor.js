@@ -2,6 +2,7 @@
 // Used for tailored resumes and for the master resume on the Profile page.
 import { h, append, clear, debounce, toast } from './dom.js';
 import { apiText } from './api.js';
+import { icon } from './icons.js';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -84,12 +85,39 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
   const remove = (arr, i) => { snapshot(); arr.splice(i, 1); renderForm(); touch(true); };
 
   const iconBtn = (label, text, fn, cls = '') => h('button', { class: `ib ${cls}`, title: label, 'aria-label': label, onclick: fn }, text);
-  const collapsible = (open, head, body, cls = '') => {
-    const d = h('details', { class: cls }); if (open) d.open = true;
-    d.append(h('summary', null, head), body);
+  // Everything starts closed. What the user opens stays open when the form redraws (after adding or moving things).
+  const opened = new Set();
+  const collapsible = (key, head, body, cls = '') => {
+    const d = h('details', { class: cls }); if (opened.has(key)) d.open = true;
+    d.addEventListener('toggle', () => { if (d.open) opened.add(key); else opened.delete(key); });
+    d.append(h('summary', null, head), h('div', { class: 'dbody' }, body));
     d.addEventListener('toggle', () => d.querySelectorAll('textarea').forEach(grow));
     return d;
   };
+
+  const KIND_ICON = { summary: 'file', experience: 'building', projects: 'board', skills: 'target', education: 'list' };
+  const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const nice = (t) => (t === t.toUpperCase() ? t.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()) : t);
+  const plain = (t) => String(t || '').replace(/\*+/g, '');
+  function preview(sec) {
+    if (sec.kind === 'summary') return plain(sec.items[0]?.text).slice(0, 90) + (plain(sec.items[0]?.text).length > 90 ? '…' : '');
+    if (sec.kind === 'skills') { const n = sec.items.reduce((a, it) => a + (it.skills?.length || (it.text ? 1 : 0)), 0); return plural(n, 'skill'); }
+    const names = sec.items.map((it) => it.title || it.subtitle).filter(Boolean);
+    return [plural(sec.items.length, 'entry', 'entries'), names.slice(0, 2).join(', ') + (names.length > 2 ? '…' : '')].filter(Boolean).join(' · ');
+  }
+  // Card header: icon, title (rename in place with the pencil), a one-line preview, tools on hover, chevron.
+  function cardHead(ic, title, sub, tools = [], onRename = null) {
+    const t = h('span', { class: 'ctitle' }, title);
+    const rename = onRename && iconBtn('Rename section', icon('pencil', 15), (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const inp = h('input', { type: 'text', class: 'renamer', value: t.textContent, onclick: (ev) => { ev.preventDefault(); ev.stopPropagation(); }, onkeydown: (ev) => { if (ev.key === ' ') ev.stopPropagation(); if (ev.key === 'Enter' || ev.key === 'Escape') { ev.preventDefault(); inp.blur(); } },
+        onblur: () => { const v = inp.value.trim(); if (v) { onRename(v); t.textContent = nice(v); touch(false); } inp.replaceWith(t); } });
+      t.replaceWith(inp); inp.focus(); inp.select();
+    });
+    return h('span', { class: 'shead' }, h('span', { class: 'cicon' }, icon(ic, 18)),
+      h('span', { class: 'ctext' }, t, sub && h('span', { class: 'csub' }, sub)),
+      h('span', { class: 'etools' }, rename, ...tools), h('span', { class: 'chev', 'aria-hidden': 'true' }));
+  }
 
   function renderForm() {
     clear(formHost);
@@ -97,7 +125,7 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
       h('label', { class: 'field' }, 'Name', input(state.header.name, (v) => { state.header.name = v; })),
       h('label', { class: 'field', style: 'margin-top:10px' }, 'Contact lines (one per line)',
         area(state.header.lines.join('\n'), (v) => { state.header.lines = v.split('\n').map((x) => x.trim()).filter(Boolean); }, { rows: 3 })));
-    formHost.append(collapsible(false, h('span', { class: 'ctitle' }, 'Contact information'), hdr, 'csec'));
+    formHost.append(collapsible('contact', cardHead('user', 'Contact information', [state.header.name, state.header.lines[0]].filter(Boolean).join(' · ')), hdr, 'csec'));
 
     state.sections.forEach((sec, si) => {
       const body = h('div', { class: 'cbody' });
@@ -123,16 +151,16 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
             h('div', { class: 'tools' },
               iconBtn('Move bullet up', '↑', () => move(it.bullets, bi, -1)),
               iconBtn('Move bullet down', '↓', () => move(it.bullets, bi, 1)),
-              iconBtn('Remove bullet', '🗑', () => remove(it.bullets, bi), 'danger'))));
+              iconBtn('Remove bullet', icon('trash', 15), () => remove(it.bullets, bi), 'danger'))));
         });
         ebody.append(h('button', { class: 'btn sm ghost', style: 'margin-top:8px', onclick: () => { snapshot(); (it.bullets ||= []).push({ id: uid(), text: '' }); renderForm(); touch(true); } }, '+ Add bullet'));
         const head = h('span', { class: 'ehead' },
-          h('b', null, it.title || 'Untitled'), it.subtitle ? h('span', { class: 'muted' }, ` · ${it.subtitle}`) : null,
+          it.title ? h('b', null, it.title) : h('b', { class: 'faint' }, 'Untitled entry'), it.subtitle ? h('span', { class: 'muted' }, ` · ${it.subtitle}`) : null, it.date ? h('span', { class: 'edate' }, it.date) : null,
           h('span', { class: 'etools' },
             iconBtn('Move entry up', '↑', (e) => { e.preventDefault(); move(sec.items, ii, -1); }),
             iconBtn('Move entry down', '↓', (e) => { e.preventDefault(); move(sec.items, ii, 1); }),
-            iconBtn('Remove entry', '🗑', (e) => { e.preventDefault(); remove(sec.items, ii); }, 'danger')));
-        body.append(collapsible(ii === 0, head, ebody, 'ent2'));
+            iconBtn('Remove entry', icon('trash', 15), (e) => { e.preventDefault(); remove(sec.items, ii); }, 'danger')));
+        body.append(collapsible(`i:${it.id}`, head, ebody, 'ent2'));
       });
 
       const addLabel = sec.kind === 'skills' ? '+ Add skill row' : sec.kind === 'summary' ? null : '+ Add entry';
@@ -142,15 +170,12 @@ export function resumeEditor({ resume, suggestions = [], onSave, onDownload, aiE
         renderForm(); touch(true);
       } }, addLabel));
 
-      const head = h('span', { class: 'shead' },
-        h('span', { class: 'ctitle' }, sec.heading || 'Section'),
-        h('span', { class: 'etools' },
-          iconBtn('Move section up', '↑', (e) => { e.preventDefault(); move(state.sections, si, -1); }),
-          iconBtn('Move section down', '↓', (e) => { e.preventDefault(); move(state.sections, si, 1); }),
-          iconBtn('Remove section', '🗑', (e) => { e.preventDefault(); if (confirm(`Remove the "${sec.heading}" section from this resume?`)) remove(state.sections, si); }, 'danger')));
-      const headingEdit = h('label', { class: 'field small', style: 'margin-top:14px' }, 'Rename this section', input(sec.heading, (v) => { sec.heading = v; }, { 'aria-label': 'Section heading' }));
-      body.append(headingEdit);
-      formHost.append(collapsible(si < 2, head, body, 'csec'));
+      const head = cardHead(KIND_ICON[sec.kind] || 'list', nice(sec.heading || 'Section'), preview(sec), [
+        iconBtn('Move section up', '↑', (e) => { e.preventDefault(); e.stopPropagation(); move(state.sections, si, -1); }),
+        iconBtn('Move section down', '↓', (e) => { e.preventDefault(); e.stopPropagation(); move(state.sections, si, 1); }),
+        iconBtn('Remove section', icon('trash', 15), (e) => { e.preventDefault(); e.stopPropagation(); if (confirm(`Remove the "${sec.heading}" section from this resume?`)) remove(state.sections, si); }, 'danger')],
+      (v) => { sec.heading = sec.heading === sec.heading.toUpperCase() ? v.toUpperCase() : v; });
+      formHost.append(collapsible(`s:${sec.id}`, head, body, 'csec'));
     });
   }
 
