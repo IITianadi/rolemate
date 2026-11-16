@@ -81,3 +81,5 @@ input.code { text-transform: uppercase; letter-spacing: .12em; text-align: cente
 
 footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.gapitem { padding: 8px 0; font-size: 13px; line-height: 1.35; } .gapitem + .gapitem { border-top: 1px solid #eee; } .gapitem .muted { font-size: 12px; }

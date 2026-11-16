@@ -313,3 +313,8 @@ table.t tbody tr { transition: background .2s; } table.t tbody tr:hover { backgr
 .ent2 > summary { position: relative; } .ent2 > summary .etools { position: absolute; right: 8px; top: 50%; transform: translateY(-50%) translateX(6px); background: var(--sunken); border-radius: 10px; padding: 2px; pointer-events: none; }
 .ent2 > summary:hover .etools { transform: translateY(-50%); pointer-events: auto; }
 .csub { max-height: 20px; transition: opacity .3s, max-height .4s var(--ease), margin .4s var(--ease); } .csec[open] > summary .csub { max-height: 0; margin-top: 0; }
+
+.fitrow { display: flex; gap: 12px; align-items: flex-start; padding: 14px 0; } .fitrow + .fitrow { box-shadow: 0 -1px 0 var(--line); }
+.fitdot { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 700; margin-top: 1px; }
+.fitrow.have .fitdot { background: var(--good-bg); color: var(--good); } .fitrow.partial .fitdot { background: var(--warn-bg); color: var(--warn); } .fitrow.missing .fitdot { background: #fde8e6; color: #c4321f; }
+.fixbox { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); line-height: 1.45; }

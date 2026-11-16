@@ -57,12 +57,13 @@ function titleTokens(s) {
   return new Set(normalize(s).split(' ').filter((t) => t.length > 1 && !stop.has(t)));
 }
 
-export function scoreMatch({ resume, confirmedSkills = [], yearsExperience = null }, job) {
+export function scoreMatch({ resume, confirmedSkills = [], yearsExperience = null, aiCovered = [] }, job) {
   const profile = profileSkillSet(resume, confirmedSkills);
   const must = job.mustHave || [];
   const nice = job.niceToHave || [];
   // "A or B" requirements: covered when any member of the group is covered.
-  const covered = (r) => has(r, profile) || (job.anyOf || []).some((g) => g.includes(r) && g.some((x) => has(x, profile)));
+  const ai = new Set(aiCovered);
+  const covered = (r) => ai.has(r) || has(r, profile) || (job.anyOf || []).some((g) => g.includes(r) && g.some((x) => has(x, profile)));
   const matchedMust = must.filter(covered);
   const missingMust = must.filter((r) => !covered(r));
   const matchedNice = nice.filter(covered);

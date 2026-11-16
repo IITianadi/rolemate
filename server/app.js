@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword, createSession, userFromToken, destroySess
 import { parseResumeFile, parseWarnings } from './lib/resume-parse.js';
 import { sanitizeResume, httpError } from './lib/model.js';
 import { cleanJdText } from './lib/jd-clean.js';
+import { analyzeFit } from './lib/fit.js';
 import { extractJob, extractBasic, pickTitle, cleanTitle, pickCompany } from './lib/jd.js';
 import { scoreMatch, estimateYears } from './lib/match.js';
 import { tailorResume, suggestRewrites } from './lib/tailor.js';
@@ -124,9 +125,13 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       requirements: j(r.requirements, {}), match: j(r.match, {}), resumes, createdAt: r.created_at, updatedAt: r.updated_at, appliedAt: r.applied_at };
   };
   // firstScore: the score when the job was first saved, kept through rescoring so the page can show progress honestly.
-  const rescore = (profile, req, prev) => {
-    const m = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, req);
-    return { ...m, firstScore: prev && prev.firstScore !== undefined ? prev.firstScore : prev ? (prev.score ?? null) : m.score };
+  // fit: the AI's requirement-by-requirement reading (kept on the job); anything it judged "have" counts as covered.
+  const rescore = (profile, req, prev, fit) => {
+    const conf = new Set((profile.confirmedSkills || []).map((x) => x.toLowerCase()));
+    const f = (fit ?? prev?.fit ?? null)?.map((i) => (conf.has(i.requirement.toLowerCase()) && i.status !== 'have' ? { ...i, status: 'have', evidence: 'You confirmed you have this.', where: '', advice: '' } : i)) ?? null;
+    const aiCovered = (f || []).filter((i) => i.status === 'have').map((i) => i.requirement);
+    const m = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null, aiCovered }, req);
+    return { ...m, ...(f ? { fit: f } : {}), firstScore: prev && prev.firstScore !== undefined ? prev.firstScore : prev ? (prev.score ?? null) : m.score };
   };
 
   async function tailorJob(user, profile, jobR, { force } = {}) {
@@ -399,7 +404,9 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       // Same address but a different posting (single-page sites, stale pages): keep it as its own job.
       if (!existing && rows.length) jobKey = `${prefix}${shortHash(text)}`;
     }
-    const match = rescore(profile, reqs, existing ? j(existing.match, {}) : null);
+    const base = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, reqs);
+    const fit = await analyzeFit(profile.resume, reqs, base, profile.confirmedSkills);
+    const match = rescore(profile, reqs, existing ? j(existing.match, {}) : null, fit);
     let jobId;
     if (existing) {
       jobId = existing.id;
@@ -462,6 +469,18 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     }
     const match = rescore(profile, reqs, j(r.match, {}));
     db.prepare("UPDATE jobs SET match = ?, updated_at = datetime('now') WHERE id = ?").run(JSON.stringify(match), r.id);
+    res.json({ job: jobOut(jobRow(req.user.id, r.id)) });
+  });
+
+  // Re-read the requirements against the current resume (after editing it).
+  app.post('/api/jobs/:id/fit', auth, async (req, res) => {
+    const profile = needProfile(req.user.id);
+    const r = jobRow(req.user.id, req.params.id);
+    const reqs = j(r.requirements, {});
+    const prev = j(r.match, {});
+    const base = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, reqs);
+    const fit = await analyzeFit(profile.resume, reqs, base, profile.confirmedSkills);
+    db.prepare("UPDATE jobs SET match = ?, updated_at = datetime('now') WHERE id = ?").run(JSON.stringify(rescore(profile, reqs, prev, fit)), r.id);
     res.json({ job: jobOut(jobRow(req.user.id, r.id)) });
   });
 

@@ -297,6 +297,7 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
   const m = job.match || {};
   const color = m.band === 'strong' ? '#1fb57a' : m.band === 'partial' ? '#2f6bff' : '#f5a623';
   const missing = m.missingMust || []; const have = (m.matchedMust || []).length; const req = have + missing.length;
+  const fit = m.fit || []; const fitGaps = fit.filter((i) => i.status !== 'have').sort((a, b) => (a.kind === 'must' ? 0 : 1) - (b.kind === 'must' ? 0 : 1) || (a.status === 'missing' ? 0 : 1) - (b.status === 'missing' ? 0 : 1));
   const openJob = () => openTab(`/#/job/${job.id}`);
   const dl = el('button', { class: 'btn primary', onclick: async () => {
     dl.disabled = true; dl.textContent = 'Preparing your PDF…';
@@ -310,15 +311,20 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
     m.score != null
       ? el('div', { class: 'score' }, ring(m.score, color), el('div', {},
         el('strong', {}, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match' }[m.band] || 'Match'),
-        el('div', { class: 'muted' }, req ? `Has ${have} of ${req} required skills` : 'Scored on experience and role')))
+        el('div', { class: 'muted' }, req ? `Covers ${have} of ${req} required skills` : 'Scored on experience and role')))
       : el('p', { class: 'muted' }, 'No clear requirements found on this page, so there’s no score.'),
-    missing.length > 0 && el('div', { class: 'gaps' }, el('div', { class: 'label' }, 'Missing from your resume'),
-      el('div', { class: 'chips' }, missing.slice(0, 5).map((s) => el('span', { class: 'chip' }, s)), missing.length > 5 && el('span', { class: 'chip more' }, `+${missing.length - 5}`))),
+    // With the AI reading: say what is missing and where it could go. Otherwise just the missing names.
+    fitGaps.length > 0
+      ? el('div', { class: 'gaps' }, el('div', { class: 'label' }, `${fit.filter((i) => i.status === 'have').length} covered · ${fitGaps.length} to fix`),
+        fitGaps.slice(0, 3).map((i) => el('div', { class: 'gapitem' }, el('strong', {}, i.requirement), i.where && el('div', { class: 'muted' }, `Add under: ${i.where}`))),
+        fitGaps.length > 3 && el('div', { class: 'muted' }, `+${fitGaps.length - 3} more in your dashboard`))
+      : missing.length > 0 && el('div', { class: 'gaps' }, el('div', { class: 'label' }, 'Missing from your resume'),
+        el('div', { class: 'chips' }, missing.slice(0, 5).map((s) => el('span', { class: 'chip' }, s)), missing.length > 5 && el('span', { class: 'chip more' }, `+${missing.length - 5}`))),
     quotaExceeded
       ? message('stop', 'You’re out of credits', 'The job is saved and scored, but no resume was made. Buy credits to tailor it.',
         el('button', { class: 'btn primary', onclick: () => openTab('/#/settings/billing') }, 'Buy credits'))
       : resumeId && [dl, next],
-    el('button', { class: 'btn', onclick: openJob }, missing.length ? 'Review missing skills' : 'Open in dashboard'),
+    el('button', { class: 'btn', onclick: openJob }, missing.length || fitGaps.length ? 'See how to fix' : 'Open in dashboard'),
     await footer());
 }
 
