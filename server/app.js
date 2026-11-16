@@ -367,7 +367,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const hints = { title: finalTitle, company, location: believe(hin.location) };
     // The title usually sits in the page header above the description: read it from the full text before cleaning.
     if (!hints.title && posting !== text) hints.title = cleanTitle(extractBasic(text, hints).title || '');
-    const reqs = await extractJob(posting, hints);
+    const reqs = await extractJob(posting, hints, { context: text });
     // Sizes only (no job text) so a bad capture can be diagnosed from the logs.
     console.log(`[capture] source=${String(req.body?.source || '').slice(0, 40)} text=${text.length} posting=${posting.length} skills=${reqs.mustHave.length} title=${reqs.title ? 'yes' : 'no'} company=${reqs.company ? 'yes' : 'no'}`);
     if (!reqs.company) reqs.company = weakCompany(); // last resort: site name / page title / URL slug

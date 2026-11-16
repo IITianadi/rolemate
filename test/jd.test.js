@@ -76,3 +76,9 @@ test('page chrome is never a title: "0 notifications", "Feed detail update"', as
   const { pickTitle } = await import('../server/lib/jd.js');
   assert.equal(pickTitle(['0 notifications', '(3) notifications', 'Feed detail update', 'Post'], '0 notifications Feed detail update Post hiring a Product Manager'), '');
 });
+
+test('hiring post with heading "Role – Company (Remote)" and "Company is looking for a high-potential Role"', () => {
+  const r = extractBasic(`🚀 We’re Hiring | Associate Product Manager (Full-Time) – NxtPe (Remote)\n\nNxtPe is looking for a high-potential Associate Product Manager (APM) to join our product team full-time.`);
+  assert.equal(r.company, 'NxtPe');
+  assert.equal(r.title, 'Associate Product Manager');
+});

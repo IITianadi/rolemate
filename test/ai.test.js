@@ -221,3 +221,15 @@ test('cost guard: premium models are ignored unless explicitly allowed', async (
   assert.equal(pickModel('claude-opus-5-5'), 'claude-opus-5-5');
   if (saved === undefined) delete process.env.ALLOW_PREMIUM_MODELS; else process.env.ALLOW_PREMIUM_MODELS = saved;
 });
+
+test('extractJob: AI decides company and title over page hints; an invented company is ignored', async () => {
+  const { extractJob } = await import('../server/lib/jd.js');
+  const post = 'We’re Hiring | Associate Product Manager (Full-Time) – NxtPe (Remote)\nNxtPe is looking for a high-potential Associate Product Manager (APM). SQL, Figma.';
+  setClientForTests(fake({ beta: () => ({ stop_reason: 'end_turn', content: [text('{"title":"Associate Product Manager","company":"NxtPe","location":"Remote","mustHave":["SQL","Figma"],"niceToHave":[]}')] }) }));
+  let r = await extractJob(post, { title: '0 notifications', company: 'LinkedIn' });
+  assert.equal(r.company, 'NxtPe'); assert.equal(r.title, 'Associate Product Manager'); assert.equal(r.mode, 'ai');
+  setClientForTests(fake({ beta: () => ({ stop_reason: 'end_turn', content: [text('{"title":"Associate Product Manager","company":"Google","mustHave":["SQL"],"niceToHave":[]}')] }) }));
+  r = await extractJob(post, {});
+  assert.equal(r.company, 'NxtPe');
+  setClientForTests(null);
+});

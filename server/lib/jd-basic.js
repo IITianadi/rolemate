@@ -70,7 +70,7 @@ export function parseYears(text) {
 const ROLE_WORD = /\b(engineer|developer|manager|analyst|designer|executive|associate|intern|lead|consultant|specialist|architect|scientist|officer|administrator|recruiter|writer|marketer|accountant|representative|tester|head|director|coordinator|supervisor|technician|assistant|strategist|advisor|trainee)\b/i;
 
 // LinkedIn hiring posts: "Airtel Payments Bank is hiring a Product Manager – Lending to join our Gurgaon office!"
-const HIRING = /(?:^|[\n.!🚀📢✨🔥]\s*)([A-Z][\w&.'’\- ]{1,50}?)\s+(?:is|are)\s+(?:now\s+)?(?:hiring|looking for)\s*(?:an?\s+|for\s+(?:an?\s+)?)?([A-Z][\w/&+.'’\- –—]{2,70}?)(?=\s*(?:\(|\bto\b|\bat\b|\bin\b|\bfor\b|\bwith\b|\bwho\b|[,.!|:\n]|$))/;
+const HIRING = /(?:^|[\n.!🚀📢✨🔥]\s*)([A-Z][\w&.'’\- ]{1,50}?)\s+(?:is|are)\s+(?:now\s+)?(?:hiring|looking for)\s*(?:an?\s+|for\s+(?:an?\s+)?)?(?:[a-z][\w-]*\s+){0,3}([A-Z][\w/&+.'’\- –—]{2,70}?)(?=\s*(?:\(|\bto\b|\bat\b|\bin\b|\bfor\b|\bwith\b|\bwho\b|[,.!|:\n]|$))/;
 export function hiringPost(body) {
   const m = String(body || '').slice(0, 1500).match(HIRING);
   if (!m || !ROLE_WORD.test(m[2]) || /^(we|i|our team|my team|they|he|she)$/i.test(m[1].trim())) return { title: '', company: '' };
@@ -95,6 +95,9 @@ const NOT_COMPANY = /\b(requirements?|responsibilit|qualifications?|about|apply|
 
 // "at Acme Corp" in running text, else a short capitalised line right next to the title ("Nike" under "Product Manager").
 function guessCompany(body, lines = []) {
+  // Heading style: "We’re Hiring | Associate Product Manager (Full-Time) – NxtPe (Remote)"
+  const h = body.slice(0, 600).match(/[–—]\s+([A-Z][\w&.]*(?:[ \t]+[A-Z][\w&.]*){0,2})[ \t]*\((?:remote|hybrid|on-?site)/i);
+  if (h && !ROLE_WORD.test(h[1]) && !NOT_COMPANY.test(h[1])) return h[1].trim();
   const m = body.match(/\bat[ \t]+((?:[A-Z][\w&.\-]*)(?:[ \t]+(?:[A-Z][\w&.\-]*|&)){0,3})(?![\w.\-]*@)/);
   if (m) return m[1].trim().replace(/[.,]$/, '');
   const t = lines.findIndex((l) => l.length <= 90 && ROLE_WORD.test(l));
