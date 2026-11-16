@@ -297,7 +297,7 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
   const m = job.match || {};
   const color = m.band === 'strong' ? '#1fb57a' : m.band === 'partial' ? '#2f6bff' : '#f5a623';
   const missing = m.missingMust || []; const have = (m.matchedMust || []).length; const req = have + missing.length;
-  const fit = m.fit || []; const fitGaps = fit.filter((i) => i.status !== 'have').sort((a, b) => (a.kind === 'must' ? 0 : 1) - (b.kind === 'must' ? 0 : 1) || (a.status === 'missing' ? 0 : 1) - (b.status === 'missing' ? 0 : 1));
+  const fit = m.fit || []; const fitGaps = fit.filter((i) => i.status !== 'strong' && i.kind !== 'responsibility').sort((a, b) => ['mandatory', 'must', 'nice'].indexOf(a.kind) - ['mandatory', 'must', 'nice'].indexOf(b.kind) || (a.status === 'missing' ? 0 : 1) - (b.status === 'missing' ? 0 : 1));
   const openJob = () => openTab(`/#/job/${job.id}`);
   // Confirming a skill adds it to the tailored resume (in your skills section), so the download already includes it.
   const confirmGap = async (skill, btn) => {
@@ -324,7 +324,7 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
       : el('p', { class: 'muted' }, 'No clear requirements found on this page, so there’s no score.'),
     // With the AI reading: say what is missing and where it could go. Otherwise just the missing names.
     fitGaps.length > 0
-      ? el('div', { class: 'gaps' }, el('div', { class: 'label' }, `${fit.filter((i) => i.status === 'have').length} covered · ${fitGaps.length} to fix`),
+      ? el('div', { class: 'gaps' }, el('div', { class: 'label' }, `${fit.filter((i) => i.status === 'strong' && i.kind !== 'responsibility').length} strong · ${fitGaps.length} to fix`),
         fitGaps.slice(0, 3).map((i) => { const b = el('button', { class: 'btn sm', onclick: () => confirmGap(i.requirement, b) }, 'I have this');
           return el('div', { class: 'gapitem' }, el('strong', {}, i.requirement), i.where && el('div', { class: 'muted' }, `Add under: ${i.where}`), b); }),
         fitGaps.length > 3 && el('div', { class: 'muted' }, `+${fitGaps.length - 3} more in your dashboard`),

@@ -318,3 +318,14 @@ table.t tbody tr { transition: background .2s; } table.t tbody tr:hover { backgr
 .fitdot { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 700; margin-top: 1px; }
 .fitrow.have .fitdot { background: var(--good-bg); color: var(--good); } .fitrow.partial .fitdot { background: var(--warn-bg); color: var(--warn); } .fitrow.missing .fitdot { background: #fde8e6; color: #c4321f; }
 .fixbox { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); line-height: 1.45; }
+
+.tip { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--sunken); color: var(--muted, #6b7280); font-size: 11px; font-style: italic; font-weight: 700; cursor: help; }
+.dim { padding: 10px 0; display: grid; gap: 6px; } .dim + .dim { box-shadow: 0 -1px 0 var(--line); }
+.mandbox { border-radius: 12px; padding: 12px 14px; margin: 8px 0 6px; line-height: 1.45; } .mandbox.ok { background: var(--good-bg); } .mandbox.mid { background: var(--warn-bg); } .mandbox.bad { background: #fde8e6; }
+.fitrow.weak .fitdot, .fitrow.unverifiable .fitdot { background: var(--warn-bg); color: var(--warn); }
+.covered { margin-top: 8px; } .covered > summary { cursor: pointer; padding: 6px 0; }
+.sug { padding: 14px 0; } .sug + .sug { box-shadow: 0 -1px 0 var(--line); }
+.diff { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; } @media (max-width: 700px) { .diff { grid-template-columns: 1fr; } }
+.diff p { margin: 4px 0 0; line-height: 1.45; font-size: 14px; } .diff .orig { color: var(--muted, #6b7280); } .diff .new { background: var(--good-bg); border-radius: 8px; padding: 6px 8px; }
+.sug.rejected .new { opacity: .45; }
+.atsgrid { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; } .atsnum { background: var(--sunken); border-radius: 12px; padding: 10px 16px; display: grid; text-align: center; min-width: 78px; } .atsnum b { font-size: 1.4rem; }

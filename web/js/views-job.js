@@ -3,6 +3,7 @@ import { api, download, streamPost } from './api.js';
 import { icon } from './icons.js';
 import { renderMarkdown } from './markdown.js';
 import { STATUS_LABEL, bandOf } from './views-tracking.js';
+import { scoreCard, gapAnalysis, optimizeCard, atsCard } from './views-fit.js';
 import { nextStep, ring, logoMark, sourceName, paywall, ago } from './ui.js';
 
 
@@ -77,46 +78,6 @@ export async function jobView(id, me, go) {
       : h('div', { class: 'resumeprev' }, paper, h('div', null, h('h2', { style: 'font-size:1.35rem;margin:0' }, 'Your resume for this job'),
           h('div', { class: 'muted small', style: 'margin:2px 0 16px' }, 'Same layout, reordered for this job.'), h('button', { class: 'btn primary', onclick: tailor }, 'Create resume'))));
     return h('div', { class: 'card hero' }, left, right);
-  }
-
-  // What the job wants, what your resume already shows, what is missing, and where to add it.
-  function gapsCard() {
-    const m = job.match || {}; const fit = m.fit;
-    const confirm = async (skill) => {
-      try {
-        const before = job.match?.score; const r = await api(`/api/jobs/${id}/gaps`, { method: 'POST', body: { skill, has: true } }); job = { ...job, ...r.job };
-        const after = job.match?.score; toast(after != null && before != null && after > before ? `${skill} added. Score ${before}% → ${after}%` : `${skill} added`); draw();
-      } catch (e) { toast(e.message, true); }
-    };
-    if (!fit?.length) return legacyGaps(m, confirm);
-    const n = (st) => fit.filter((i) => i.status === st).length;
-    const row = (i) => h('div', { class: `fitrow ${i.status}` },
-      h('i', { class: 'fitdot', 'aria-hidden': 'true' }, i.status === 'have' ? '✓' : i.status === 'partial' ? '~' : '✕'),
-      h('div', { class: 'grow' },
-        h('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' }, h('strong', null, i.requirement), h('span', { class: 'small muted' }, { have: 'On your resume', partial: 'Partly there', missing: 'Not on your resume' }[i.status])),
-        i.evidence && h('div', { class: 'small muted', style: 'margin-top:4px' }, `Shown by: “${i.evidence}”`),
-        i.status !== 'have' && (i.where || i.advice) && h('div', { class: 'fixbox' },
-          i.where && h('div', { class: 'small' }, h('b', null, 'Where to add it: '), i.where),
-          i.advice && h('div', { class: 'small', style: 'margin-top:4px' }, i.advice)),
-        i.status !== 'have' && h('button', { class: 'btn sm', style: 'margin-top:8px', onclick: () => confirm(i.requirement) }, 'I have this')));
-    const group = (kind, title, sub) => { const list = fit.filter((i) => i.kind === kind); return list.length > 0 && h('div', { style: 'margin-top:18px' }, h('div', { class: 'label' }, title), h('p', { class: 'muted small', style: 'margin:2px 0 6px' }, sub),
-      // Missing first, then partial, then covered.
-      [...list].sort((x, y) => ['missing', 'partial', 'have'].indexOf(x.status) - ['missing', 'partial', 'have'].indexOf(y.status)).map(row)); };
-    return h('div', { class: 'card', id: 'gaps' }, h('h2', null, 'How your resume fits this job'),
-      h('p', { class: 'muted small' }, `${n('have')} covered · ${n('partial')} partly · ${n('missing')} missing. Tap “I have this” only if it’s true. We never add anything you haven’t confirmed.`),
-      group('must', 'The job asks for', 'These are the requirements the posting treats as essential.'),
-      group('nice', 'Nice to have', 'Optional, but they strengthen your application.'),
-      h('div', { class: 'row', style: 'margin-top:16px' }, h('button', { class: 'btn ghost sm', onclick: async () => { try { const r = await api(`/api/jobs/${id}/fit`, { method: 'POST' }); job = { ...job, ...r.job }; toast('Checked against your latest resume'); draw(); } catch (e) { toast(e.message, true); } } }, icon('refresh', 15), 'Re-check after editing my resume')));
-  }
-  function legacyGaps(m, confirm) {
-    const gapRow = (skill, kind) => h('div', { class: 'gap' },
-      h('span', { class: `chip ${kind === 'must' ? 'warn' : 'info'}` }, skill), h('span', { class: 'grow small muted' }, kind === 'must' ? 'Required' : 'Nice to have'),
-      h('button', { class: 'btn sm', onclick: () => confirm(skill) }, 'I have this'));
-    const missing = [...(m.missingMust || []).map((s) => gapRow(s, 'must')), ...(m.missingNice || []).map((s) => gapRow(s, 'nice'))];
-    return h('div', { class: 'card', id: 'gaps' }, h('h2', null, missing.length ? 'Missing skills' : 'Nothing missing'),
-      missing.length ? [h('p', { class: 'muted small' }, 'Tap “I have this” only if it’s true. We never add a skill you haven’t confirmed.'), ...missing]
-        : h('p', { class: 'muted' }, m.score == null ? 'Nothing to compare yet.' : 'Your resume covers every requirement.'),
-      (m.matchedMust?.length > 0) && h('div', { style: 'margin-top:20px' }, h('div', { class: 'label', style: 'margin-bottom:8px' }, 'You have'), h('div', { class: 'reqs' }, [...m.matchedMust, ...(m.matchedNice || [])].map((sk) => h('span', { class: 'chip good' }, sk)))));
   }
 
   // ---------- Interview prep (company research + brief + questions)
@@ -368,7 +329,7 @@ export async function jobView(id, me, go) {
       next(),
       h('div', { class: 'tabs', role: 'tablist' }, [['overview', 'Fit & resume'], ['info', 'Job info'], ['prep', 'Interview prep'], ['chat', 'Ask AI']].map(([k, l]) =>
         h('button', { class: tab === k ? 'on' : '', role: 'tab', onclick: () => { tab = k; draw(); } }, l))));
-    if (tab === 'overview') host.append(hero(), h('div', { class: 'layout2' }, gapsCard(), h('div', { class: 'card' }, h('h3', null, 'Notes'), notes, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: async () => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { notes: notes.value } }); toast('Saved'); } catch (e) { toast(e.message, true); } } }, 'Save')))));
+    if (tab === 'overview') host.append(hero(), scoreCard(job), h('div', { class: 'layout2' }, gapAnalysis({ job, id, setJob: (j2, merge) => { job = merge ? { ...job, ...j2 } : j2; }, redraw: draw }), h('div', { class: 'card' }, h('h3', null, 'Notes'), notes, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: async () => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { notes: notes.value } }); toast('Saved'); } catch (e) { toast(e.message, true); } } }, 'Save')))), optimizeCard({ job, redraw: draw }), atsCard({ job }));
     else if (!job.credit && (tab === 'prep' || tab === 'chat')) host.append(paywall(me.quota, 'Pay now to unlock interview prep and Ask AI for this job.'));
     else if (tab === 'prep') host.append(prepView());
     else if (tab === 'chat') host.append(chatView());

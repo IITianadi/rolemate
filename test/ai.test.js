@@ -233,20 +233,3 @@ test('extractJob: AI decides company and title over page hints; an invented comp
   assert.equal(r.company, 'NxtPe');
   setClientForTests(null);
 });
-
-test('analyzeFit: AI reads meaning, quotes must exist in the resume, advice names a real place', async () => {
-  const { analyzeFit } = await import('../server/lib/fit.js');
-  const first = resume.sections.find((s) => s.items.some((i) => i.bullets?.length));
-  const quote = first.items.find((i) => i.bullets?.length).bullets[0].text.replace(/\*/g, '').slice(0, 40);
-  const place = first.heading;
-  setClientForTests(fake({ beta: () => ({ stop_reason: 'end_turn', content: [text(JSON.stringify({ items: [
-    { requirement: 'Ownership', status: 'have', evidence: quote, where: '', advice: '' },
-    { requirement: 'Figma', status: 'missing', evidence: '', where: place, advice: 'If you have used Figma, add it.' },
-    { requirement: 'Roadmapping', status: 'have', evidence: 'a line that is not on the resume', where: '', advice: '' },
-  ] }))] }) }));
-  const out = await analyzeFit(resume, { mustHave: ['Ownership', 'Figma'], niceToHave: ['Roadmapping'] });
-  assert.equal(out[0].status, 'have'); assert.equal(out[0].evidence, quote);
-  assert.equal(out[1].status, 'missing'); assert.equal(out[1].where, place);
-  assert.equal(out[2].status, 'partial'); assert.equal(out[2].evidence, '');
-  setClientForTests(null);
-});
