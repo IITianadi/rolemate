@@ -94,15 +94,6 @@ test('re-capturing the same URL reuses the job and does not use quota', async ()
   assert.equal(r.data.quota.used, 1);
 });
 
-test('capture stores the requirement-by-requirement fit, weighted dimensions and the mandatory view', async () => {
-  const { match, requirements } = (await api(`/api/jobs/${jobId}`)).data.job;
-  assert.ok(Array.isArray(requirements.items) && requirements.items.length > 0);
-  assert.ok(match.fit.length > 0 && match.fit.every((i) => ['strong', 'partial', 'weak', 'missing', 'unverifiable'].includes(i.status) && ['mandatory', 'must', 'nice', 'responsibility'].includes(i.kind)));
-  assert.ok(match.fit.filter((i) => i.status === 'strong' && i.requirement !== 'Kubernetes' && i.evidence).length > 0, 'strong matches carry the resume line');
-  assert.ok(match.dimensions.length >= 4 && match.dimensions.every((d) => d.explain && d.weight > 0));
-  assert.ok(match.mandatory && typeof match.mandatoryFailed === 'boolean');
-});
-
 test('confirming a gap updates the score and the next tailored resume includes it', async () => {
   const before = (await api(`/api/jobs/${jobId}`)).data.job.match.score;
   const g = await api(`/api/jobs/${jobId}/gaps`, { method: 'POST', body: { skill: 'Kubernetes', has: true } });
@@ -131,20 +122,6 @@ test('PDF is real, and HTML highlights metrics', async () => {
   assert.match(html, /<b>38%<\/b>/);
   assert.match(html, /<b>2 million<\/b>/);
   assert.doesNotMatch(html, /<b>2022<\/b>/);
-});
-
-test('Word and ATS endpoints: docx opens, names use name + company, ATS reads the real PDF; both are private', async () => {
-  const d = await api(`/api/resumes/${resumeId}/docx`, { raw: true });
-  assert.equal(d.status, 200);
-  assert.match(d.headers.get('content-disposition'), /filename="Rahul_Sharma_Resume_Acme_Payments\.docx"/);
-  assert.equal(Buffer.from(await d.arrayBuffer()).slice(0, 2).toString(), 'PK');
-  const a = await api(`/api/resumes/${resumeId}/ats`);
-  assert.equal(a.status, 200); assert.equal(a.data.ats.label, 'ATS Compatibility Score'); assert.ok(a.data.ats.score > 0);
-  const saved = token; token = null;
-  assert.equal((await api(`/api/resumes/${resumeId}/docx`)).status, 401); assert.equal((await api(`/api/resumes/${resumeId}/ats`)).status, 401);
-  token = saved;
-  const fit = await api(`/api/jobs/${jobId}/fit`, { method: 'POST' });
-  assert.equal(fit.status, 200); assert.ok(fit.data.job.match.fit.length > 0);
 });
 
 test('a generated PDF can be uploaded again (round trip) and keeps its sections', async () => {

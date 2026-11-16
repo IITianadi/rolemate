@@ -8,9 +8,6 @@ import { parseResumeFile, parseWarnings } from './lib/resume-parse.js';
 import { sanitizeResume, httpError } from './lib/model.js';
 import { cleanJdText } from './lib/jd-clean.js';
 import { analyzeFit } from './lib/fit.js';
-import { atsReport } from './lib/ats.js';
-import { buildDocx } from './lib/docx.js';
-import { scoreV2, weightsFromEnv } from './lib/score.js';
 import { extractJob, extractBasic, pickTitle, cleanTitle, pickCompany } from './lib/jd.js';
 import { scoreMatch, estimateYears } from './lib/match.js';
 import { tailorResume, suggestRewrites } from './lib/tailor.js';
@@ -128,17 +125,13 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       requirements: j(r.requirements, {}), match: j(r.match, {}), resumes, createdAt: r.created_at, updatedAt: r.updated_at, appliedAt: r.applied_at };
   };
   // firstScore: the score when the job was first saved, kept through rescoring so the page can show progress honestly.
-  // fit: the requirement-by-requirement reading (kept on the job). Anything judged "strong" counts as covered.
-  // The headline score comes from the weighted dimensions in score.js; the older skill lists stay for the extension and old jobs.
+  // fit: the AI's requirement-by-requirement reading (kept on the job); anything it judged "have" counts as covered.
   const rescore = (profile, req, prev, fit) => {
     const conf = new Set((profile.confirmedSkills || []).map((x) => x.toLowerCase()));
-    const f = (fit ?? prev?.fit ?? null)?.map((i) => (conf.has(i.requirement.toLowerCase()) && i.status !== 'strong' ? { ...i, status: 'strong', exact: true, evidence: 'You confirmed you have this.', source: null, where: '', advice: '' } : i)) ?? null;
-    const aiCovered = (f || []).filter((i) => i.status === 'strong').map((i) => i.requirement);
-    const years = profile.facts.yearsExperience ?? null;
-    const m = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: years, aiCovered }, req);
-    const v2 = f?.length ? scoreV2(f, { resume: profile.resume, meta: req.meta || {}, years: years ?? m.yearsExperience, weights: weightsFromEnv() }) : null;
-    return { ...m, ...(v2 ? { score: v2.score ?? m.score, band: v2.score == null ? m.band : v2.band, dimensions: v2.dimensions, mandatory: v2.mandatory, mandatoryFailed: v2.mandatoryFailed } : {}), ...(f ? { fit: f } : {}),
-      firstScore: prev && prev.firstScore !== undefined ? prev.firstScore : prev ? (prev.score ?? null) : (v2?.score ?? m.score) };
+    const f = (fit ?? prev?.fit ?? null)?.map((i) => (conf.has(i.requirement.toLowerCase()) && i.status !== 'have' ? { ...i, status: 'have', evidence: 'You confirmed you have this.', where: '', advice: '' } : i)) ?? null;
+    const aiCovered = (f || []).filter((i) => i.status === 'have').map((i) => i.requirement);
+    const m = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null, aiCovered }, req);
+    return { ...m, ...(f ? { fit: f } : {}), firstScore: prev && prev.firstScore !== undefined ? prev.firstScore : prev ? (prev.score ?? null) : m.score };
   };
 
   async function tailorJob(user, profile, jobR, { force } = {}) {
@@ -150,7 +143,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       if (q.limit != null && q.remaining <= 0) return { quotaExceeded: true, quota: q };
     }
     const { resume, changes } = tailorResume(profile.resume, req, { confirmedSkills: profile.confirmedSkills });
-    const suggestions = await suggestRewrites(resume, req, 6, j(jobR.match, {}).fit || []);
+    const suggestions = await suggestRewrites(resume, req);
     const label = [jobR.company, jobR.title].filter(Boolean).join(' – ') || 'Tailored resume';
     const info = db.prepare('INSERT INTO resumes (user_id, job_id, label, data, changes, suggestions) VALUES (?,?,?,?,?,?)')
       .run(user.id, jobR.id, label, JSON.stringify(resume), JSON.stringify(changes), JSON.stringify(suggestions));
@@ -411,7 +404,8 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       // Same address but a different posting (single-page sites, stale pages): keep it as its own job.
       if (!existing && rows.length) jobKey = `${prefix}${shortHash(text)}`;
     }
-    const fit = await analyzeFit(profile.resume, reqs, { confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null });
+    const base = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, reqs);
+    const fit = await analyzeFit(profile.resume, reqs, base, profile.confirmedSkills);
     const match = rescore(profile, reqs, existing ? j(existing.match, {}) : null, fit);
     let jobId;
     if (existing) {
@@ -484,7 +478,8 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const r = jobRow(req.user.id, req.params.id);
     const reqs = j(r.requirements, {});
     const prev = j(r.match, {});
-    const fit = await analyzeFit(profile.resume, reqs, { confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null });
+    const base = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, reqs);
+    const fit = await analyzeFit(profile.resume, reqs, base, profile.confirmedSkills);
     db.prepare("UPDATE jobs SET match = ?, updated_at = datetime('now') WHERE id = ?").run(JSON.stringify(rescore(profile, reqs, prev, fit)), r.id);
     res.json({ job: jobOut(jobRow(req.user.id, r.id)) });
   });
@@ -604,7 +599,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   app.put('/api/resumes/:id', auth, (req, res) => {
     const r = resumeRow(req.user.id, req.params.id);
     const data = sanitizeResume(req.body?.resume);
-    const suggestions = Array.isArray(req.body?.suggestions) ? req.body.suggestions.slice(0, 30).map((s) => ({ itemId: String(s.itemId || ''), bulletId: String(s.bulletId || ''), original: String(s.original || '').slice(0, 1500), proposed: String(s.proposed || '').slice(0, 1500), reason: String(s.reason || '').slice(0, 200), requirement: String(s.requirement || '').slice(0, 90), status: ['pending', 'accepted', 'rejected'].includes(s.status) ? s.status : 'pending' })) : j(r.suggestions, []);
+    const suggestions = Array.isArray(req.body?.suggestions) ? req.body.suggestions.slice(0, 30).map((s) => ({ itemId: String(s.itemId || ''), bulletId: String(s.bulletId || ''), original: String(s.original || '').slice(0, 1500), proposed: String(s.proposed || '').slice(0, 1500), reason: String(s.reason || '').slice(0, 200), status: ['pending', 'accepted', 'rejected'].includes(s.status) ? s.status : 'pending' })) : j(r.suggestions, []);
     db.prepare("UPDATE resumes SET data = ?, suggestions = ?, updated_at = datetime('now') WHERE id = ?").run(JSON.stringify(data), JSON.stringify(suggestions), r.id);
     res.json({ ok: true });
   });
@@ -619,44 +614,16 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   app.post('/api/preview', auth, (req, res) => sendResumeHtml(res, sanitizeResume(req.body?.resume), Array.isArray(req.body?.marks) ? new Set(req.body.marks.slice(0, 200).map(String)) : null));
   app.get('/api/resumes/:id/html', auth, (req, res) => sendResumeHtml(res, j(resumeRow(req.user.id, req.params.id).data, null)));
 
-  // Shared by the PDF and Word downloads: "Aditya_Sharma_Resume_NxtPe".
-  const resumeFileName = (r, data) => {
-    const company = r.job_id ? db.prepare('SELECT company FROM jobs WHERE id = ?').get(r.job_id)?.company : '';
-    const part = (x) => String(x || '').normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-    // "RAHUL SHARMA" -> "Rahul_Sharma"
-    const nm = (n) => (n === n.toUpperCase() ? n.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()) : n);
-    return [part(nm(String(data.header?.name || ''))), 'Resume', part(company)].filter(Boolean).join('_').slice(0, 80) || 'Resume';
-  };
-
-  app.get('/api/resumes/:id/docx', auth, (req, res) => {
-    const r = resumeRow(req.user.id, req.params.id);
-    const data = j(r.data, null);
-    db.prepare("UPDATE resumes SET downloaded_at = datetime('now') WHERE id = ? AND downloaded_at IS NULL").run(r.id);
-    res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': `attachment; filename="${resumeFileName(r, data)}.docx"` }).send(buildDocx(data));
-  });
-
-  // ATS readability of the real PDF: generate it, read its text back, and check what a parser would find.
-  app.get('/api/resumes/:id/ats', auth, async (req, res) => {
-    const r = resumeRow(req.user.id, req.params.id);
-    const data = j(r.data, null);
-    const fit = r.job_id ? j(db.prepare('SELECT match FROM jobs WHERE id = ?').get(r.job_id)?.match, {}).fit : null;
-    let text = null; let pages = null;
-    try {
-      const pdf = Buffer.from(await renderPdf(data));
-      const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse({ data: new Uint8Array(pdf) });
-      try { const t = await parser.getText(); text = t.text.replace(/^--\s*\d+\s+of\s+\d+\s*--\s*$/gm, ''); pages = t.total ?? t.pages?.length ?? null; } finally { await parser.destroy?.(); }
-    } catch (e) { console.warn('[ats] could not read the generated PDF:', e.message); }
-    res.json({ ats: atsReport(data, { text, pages, fit }) });
-  });
-
   app.get('/api/resumes/:id/pdf', auth, async (req, res) => {
     const r = resumeRow(req.user.id, req.params.id);
     const data = j(r.data, null);
     let pdf;
     try { pdf = await renderPdf(data); } catch (e) { console.error('[pdf]', e.message); throw httpError(500, 'Could not generate the PDF. Please try again.'); }
     db.prepare("UPDATE resumes SET downloaded_at = datetime('now') WHERE id = ? AND downloaded_at IS NULL").run(r.id);
-    const name = resumeFileName(r, data);
+    // "Aditya_Sharma_Resume_NxtPe.pdf": candidate name, then the company it was tailored for.
+    const company = r.job_id ? db.prepare('SELECT company FROM jobs WHERE id = ?').get(r.job_id)?.company : '';
+    const part = (x) => String(x || '').normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const name = [part(data.header?.name), 'Resume', part(company)].filter(Boolean).join('_').slice(0, 80) || 'Resume';
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${name}.pdf"` }).send(Buffer.from(pdf));
   });
 
