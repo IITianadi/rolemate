@@ -299,6 +299,15 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
   const missing = m.missingMust || []; const have = (m.matchedMust || []).length; const req = have + missing.length;
   const fit = m.fit || []; const fitGaps = fit.filter((i) => i.status !== 'have').sort((a, b) => (a.kind === 'must' ? 0 : 1) - (b.kind === 'must' ? 0 : 1) || (a.status === 'missing' ? 0 : 1) - (b.status === 'missing' ? 0 : 1));
   const openJob = () => openTab(`/#/job/${job.id}`);
+  // Confirming a skill adds it to the tailored resume (in your skills section), so the download already includes it.
+  const confirmGap = async (skill, btn) => {
+    btn.disabled = true; btn.textContent = 'Updating your resume…';
+    try {
+      const g = await callApi(`/api/jobs/${job.id}/gaps`, { method: 'POST', body: { skill, has: true } });
+      const t = await callApi(`/api/jobs/${job.id}/tailor`, { method: 'POST' });
+      await result({ job: g.job, resumeId: t.resumeId ?? resumeId, quota: t.quota, existing: true });
+    } catch (x) { btn.disabled = false; btn.textContent = x.message || 'Try again'; }
+  };
   const dl = el('button', { class: 'btn primary', onclick: async () => {
     dl.disabled = true; dl.textContent = 'Preparing your PDF…';
     try { await downloadPdf(resumeId); dl.textContent = 'Downloaded ✓'; next.hidden = false; }
@@ -316,8 +325,10 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
     // With the AI reading: say what is missing and where it could go. Otherwise just the missing names.
     fitGaps.length > 0
       ? el('div', { class: 'gaps' }, el('div', { class: 'label' }, `${fit.filter((i) => i.status === 'have').length} covered · ${fitGaps.length} to fix`),
-        fitGaps.slice(0, 3).map((i) => el('div', { class: 'gapitem' }, el('strong', {}, i.requirement), i.where && el('div', { class: 'muted' }, `Add under: ${i.where}`))),
-        fitGaps.length > 3 && el('div', { class: 'muted' }, `+${fitGaps.length - 3} more in your dashboard`))
+        fitGaps.slice(0, 3).map((i) => { const b = el('button', { class: 'btn sm', onclick: () => confirmGap(i.requirement, b) }, 'I have this');
+          return el('div', { class: 'gapitem' }, el('strong', {}, i.requirement), i.where && el('div', { class: 'muted' }, `Add under: ${i.where}`), b); }),
+        fitGaps.length > 3 && el('div', { class: 'muted' }, `+${fitGaps.length - 3} more in your dashboard`),
+        el('p', { class: 'hint' }, 'Tap “I have this” only if it’s true. Your resume is rebuilt with it before you download.'))
       : missing.length > 0 && el('div', { class: 'gaps' }, el('div', { class: 'label' }, 'Missing from your resume'),
         el('div', { class: 'chips' }, missing.slice(0, 5).map((s) => el('span', { class: 'chip' }, s)), missing.length > 5 && el('span', { class: 'chip more' }, `+${missing.length - 5}`))),
     quotaExceeded

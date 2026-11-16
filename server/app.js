@@ -620,7 +620,10 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     let pdf;
     try { pdf = await renderPdf(data); } catch (e) { console.error('[pdf]', e.message); throw httpError(500, 'Could not generate the PDF. Please try again.'); }
     db.prepare("UPDATE resumes SET downloaded_at = datetime('now') WHERE id = ? AND downloaded_at IS NULL").run(r.id);
-    const name = (r.label || data.header.name || 'resume').replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'resume';
+    // "Aditya_Sharma_Resume_NxtPe.pdf": candidate name, then the company it was tailored for.
+    const company = r.job_id ? db.prepare('SELECT company FROM jobs WHERE id = ?').get(r.job_id)?.company : '';
+    const part = (x) => String(x || '').normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const name = [part(data.header?.name), 'Resume', part(company)].filter(Boolean).join('_').slice(0, 80) || 'Resume';
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${name}.pdf"` }).send(Buffer.from(pdf));
   });
 
