@@ -10,7 +10,8 @@ import { cleanJdText } from './lib/jd-clean.js';
 import { analyzeFit } from './lib/fit.js';
 import { extractJob, extractBasic, pickTitle, cleanTitle, pickCompany } from './lib/jd.js';
 import { scoreMatch, estimateYears } from './lib/match.js';
-import { tailorResume, suggestRewrites } from './lib/tailor.js';
+import { tailorResume, tailorSummary, rewordForJob, highlightKeywords } from './lib/tailor.js';
+import { fitOnePage } from './lib/onepage.js';
 import { renderHtml, renderPdf } from './lib/render.js';
 import { aiEnabled, aiLastError, aiModel, streamChat } from './lib/ai.js';
 import { deriveProfile } from './lib/derive.js';
@@ -143,7 +144,15 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       if (q.limit != null && q.remaining <= 0) return { quotaExceeded: true, quota: q };
     }
     const { resume, changes } = tailorResume(profile.resume, req, { confirmedSkills: profile.confirmedSkills });
-    const suggestions = await suggestRewrites(resume, req);
+    // Finished resume: the job's own words (only where the resume already says it), a summary aimed at the job,
+    // key terms in bold, and one page. Nothing here adds a skill or a number the resume doesn't already have.
+    const [summary, suggestions] = await Promise.all([tailorSummary(resume, req), rewordForJob(resume, req)]);
+    if (summary) changes.push('Rewrote the summary toward this job, using only what is already in your resume.');
+    if (suggestions.length) changes.push(`Used the job’s wording in ${suggestions.length} bullet${suggestions.length === 1 ? '' : 's'} (same facts, same numbers).`);
+    const marked = highlightKeywords(resume, req);
+    if (marked.length) changes.push(`Highlighted ${marked.length} key term${marked.length === 1 ? '' : 's'} from the job: ${marked.join(', ')}.`);
+    const fitted = await fitOnePage(resume, req);
+    if (fitted.removed) changes.push(`Left out ${fitted.removed} of your least relevant bullet${fitted.removed === 1 ? '' : 's'} to keep it to one page. They are still in your master resume.`);
     const label = [jobR.company, jobR.title].filter(Boolean).join(' – ') || 'Tailored resume';
     const info = db.prepare('INSERT INTO resumes (user_id, job_id, label, data, changes, suggestions) VALUES (?,?,?,?,?,?)')
       .run(user.id, jobR.id, label, JSON.stringify(resume), JSON.stringify(changes), JSON.stringify(suggestions));

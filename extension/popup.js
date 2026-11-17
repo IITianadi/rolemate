@@ -297,17 +297,9 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
   const m = job.match || {};
   const color = m.band === 'strong' ? '#1fb57a' : m.band === 'partial' ? '#2f6bff' : '#f5a623';
   const missing = m.missingMust || []; const have = (m.matchedMust || []).length; const req = have + missing.length;
-  const fit = m.fit || []; const fitGaps = fit.filter((i) => i.status !== 'have').sort((a, b) => (a.kind === 'must' ? 0 : 1) - (b.kind === 'must' ? 0 : 1) || (a.status === 'missing' ? 0 : 1) - (b.status === 'missing' ? 0 : 1));
+  const fit = m.fit || [];
+  const gapNames = fit.length ? fit.filter((i) => i.status !== 'have' && i.kind !== 'responsibility').sort((a, b) => (a.kind === 'must' ? 0 : 1) - (b.kind === 'must' ? 0 : 1)).map((i) => i.requirement) : missing;
   const openJob = () => openTab(`/#/job/${job.id}`);
-  // Confirming a skill adds it to the tailored resume (in your skills section), so the download already includes it.
-  const confirmGap = async (skill, btn) => {
-    btn.disabled = true; btn.textContent = 'Updating your resume…';
-    try {
-      const g = await callApi(`/api/jobs/${job.id}/gaps`, { method: 'POST', body: { skill, has: true } });
-      const t = await callApi(`/api/jobs/${job.id}/tailor`, { method: 'POST' });
-      await result({ job: g.job, resumeId: t.resumeId ?? resumeId, quota: t.quota, existing: true });
-    } catch (x) { btn.disabled = false; btn.textContent = x.message || 'Try again'; }
-  };
   const dl = el('button', { class: 'btn primary', onclick: async () => {
     dl.disabled = true; dl.textContent = 'Preparing your PDF…';
     try { await downloadPdf(resumeId); dl.textContent = 'Downloaded ✓'; next.hidden = false; }
@@ -322,20 +314,15 @@ async function result({ job, resumeId, quotaExceeded, quota, existing }) {
         el('strong', {}, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match' }[m.band] || 'Match'),
         el('div', { class: 'muted' }, req ? `Covers ${have} of ${req} required skills` : 'Scored on experience and role')))
       : el('p', { class: 'muted' }, 'No clear requirements found on this page, so there’s no score.'),
-    // With the AI reading: say what is missing and where it could go. Otherwise just the missing names.
-    fitGaps.length > 0
-      ? el('div', { class: 'gaps' }, el('div', { class: 'label' }, `${fit.filter((i) => i.status === 'have').length} covered · ${fitGaps.length} to fix`),
-        fitGaps.slice(0, 3).map((i) => { const b = el('button', { class: 'btn sm', onclick: () => confirmGap(i.requirement, b) }, 'I have this');
-          return el('div', { class: 'gapitem' }, el('strong', {}, i.requirement), i.where && el('div', { class: 'muted' }, `Add under: ${i.where}`), b); }),
-        fitGaps.length > 3 && el('div', { class: 'muted' }, `+${fitGaps.length - 3} more in your dashboard`),
-        el('p', { class: 'hint' }, 'Tap “I have this” only if it’s true. Your resume is rebuilt with it before you download.'))
-      : missing.length > 0 && el('div', { class: 'gaps' }, el('div', { class: 'label' }, 'Missing from your resume'),
-        el('div', { class: 'chips' }, missing.slice(0, 5).map((s) => el('span', { class: 'chip' }, s)), missing.length > 5 && el('span', { class: 'chip more' }, `+${missing.length - 5}`))),
+    // Missing items are only shown. Nothing is added for you: add them to your resume if you have them.
+    gapNames.length > 0 && el('div', { class: 'gaps' }, el('div', { class: 'label' }, 'Not on your resume'),
+      el('div', { class: 'chips' }, gapNames.slice(0, 5).map((s) => el('span', { class: 'chip' }, s)), gapNames.length > 5 && el('span', { class: 'chip more' }, `+${gapNames.length - 5}`)),
+      el('p', { class: 'hint' }, 'Have any of these? Add them to your resume in the dashboard.')),
     quotaExceeded
       ? message('stop', 'You’re out of credits', 'The job is saved and scored, but no resume was made. Buy credits to tailor it.',
         el('button', { class: 'btn primary', onclick: () => openTab('/#/settings/billing') }, 'Buy credits'))
       : resumeId && [dl, next],
-    el('button', { class: 'btn', onclick: openJob }, missing.length || fitGaps.length ? 'See how to fix' : 'Open in dashboard'),
+    el('button', { class: 'btn', onclick: openJob }, gapNames.length ? 'See what’s missing' : 'Open in dashboard'),
     await footer());
 }
 
