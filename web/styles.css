@@ -433,3 +433,15 @@ body { font-size: 16px; } .small { font-size: 15.5px; } .label { font-size: 14.5
 .setup-mini { margin-top: 18px; } .setup-mini .count { margin: 0 0 8px; } .setup-mini .progress-track { margin: 0 0 12px; } .setup-mini p { margin: 0 0 10px; }
 /* the "What we changed" list: calm focus ring */
 .changes summary { cursor: pointer; font-weight: 800; padding: 10px 0; } .changes summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Alignment: values on the right never wrap or shift; names take the remaining width. */
+.gaplist li { align-items: baseline; } .gaplist li > b { flex: 1 1 auto; min-width: 0; } .gaplist li > span { flex: none; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.counts li > :last-child, .credits-row > :last-child { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Credit packs: every pack has the same top, the "Best value" tab sits on the border, and Buy lines up at the bottom. */
+.packs { align-items: stretch; }
+.pack { position: relative; padding-top: 36px; } .pack .btn { margin-top: auto; align-self: flex-start; }
+.pack .price { margin-top: 2px; }
+.pack > .chip.primary { position: absolute; top: -1px; left: -1px; background: var(--ink); color: #fff; border-color: var(--ink); padding: 3px 10px; font-size: 13px; }
+.pack .small { margin-bottom: 10px; }
+.nudge .pack.best > .chip.primary, .pack.best > .chip.primary { top: -2px; left: -2px; }
+.pack, .nudge .pack { padding: 38px 14px 14px; } .pack.best, .nudge .pack.best { padding: 37px 13px 13px; }
