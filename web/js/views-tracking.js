@@ -1,7 +1,7 @@
 import { h, toast, clear } from './dom.js';
 import { api } from './api.js';
 import { icon } from './icons.js';
-import { pageHead, emptyState, nextStep, logoMark, ago, exact, parseTs } from './ui.js';
+import { pageHead, emptyState, nextStep, logoMark, ago, exact, parseTs, creditNudge } from './ui.js';
 
 export const STATUS_LABEL = { saved: 'Saved', applied: 'Applied', screening: 'Screening call', interview: 'Interview', offer: 'Offer', rejected: 'Rejected' };
 export const bandOf = (m) => m?.band || 'unknown';
@@ -74,7 +74,16 @@ function checklist(me, jobs, go) {
     store.set(userKey(me, 'setup'), '1'); // setup is done: the This week module takes the column
     return null;
   }
-  if (store.get(userKey(me, 'skip'), '') === '1') return null;
+  if (store.get(userKey(me, 'skip'), '') === '1') {
+    // Hidden, not gone: a compact reminder that always names the next step, until setup is finished.
+    const next = steps[nowAt];
+    return h('section', { class: 'dmod setup-mini', 'aria-label': 'Finish setup' }, h('div', { class: 'dtab' }, 'Finish setup'),
+      h('p', { class: 'count' }, h('b', null, `${doneN} of ${steps.length}`), ' done'),
+      h('div', { class: 'progress-track' }, h('i', { style: `width:${Math.round((doneN / steps.length) * 100)}%` })),
+      h('p', null, h('b', null, 'Next: '), next.title),
+      h('div', { class: 'row' }, ...(next.act ? next.act(true) : []),
+        h('button', { class: 'btn ghost sm', onclick: () => { store.set(userKey(me, 'skip'), ''); go('#/tracking'); } }, 'Show all steps')));
+  }
   return h('div', { class: 'card onboard', style: 'margin-bottom:26px' },
     h('div', { class: 'row between' }, h('h2', { style: 'margin:0' }, 'Your progress'), h('span', { class: 'muted small' }, h('b', null, `${doneN} of ${steps.length}`), ' done')),
     h('div', { class: 'progress-track' }, h('i', { style: `width:${Math.round((doneN / steps.length) * 100)}%` })),
@@ -170,7 +179,9 @@ export async function trackingView(me, go) {
   const side = list || h('div', { class: 'dside dmod' }, h('div', { class: 'dtab' }, 'This week'),
     h('div', { class: 'dweek' }, h('span', { class: 'big' }, String(appliedWeek)), h('b', null, `application${appliedWeek === 1 ? '' : 's'} sent`), h('p', null, appliedWeek >= 4 ? 'A strong week. Keep the interviews first.' : 'One more good-fit job today keeps you moving.')),
     h('div', { class: 'dweek' }, h('ul', { class: 'counts' }, statuses.map((k) => h('li', null, h('span', null, STATUS_LABEL[k]), h('b', null, n(k)))))),
-    credits != null && h('div', { class: 'dweek' }, h('b', null, `${credits} credit${credits === 1 ? '' : 's'} left`), h('p', null, 'One credit covers one job: save, tailor, prep and chat. Credits never expire.'), h('a', { href: '#/settings' }, 'Buy more credits')));
+    credits != null && credits > 10 && h('div', { class: 'dweek' }, h('b', null, `${credits} credits left`), h('p', null, 'One credit covers one job. Credits never expire.')));
+  const nudge = credits != null && credits <= 10 ? creditNudge(me.quota, { buy: false }) : null;
+  if (nudge) { nudge.append(h('a', { class: 'btn', href: '#/settings/billing' }, 'See credit packs')); }
   host.classList.add('dash');
   host.append(pageHead('Jobs', `${n('saved')} saved · ${n('applied')} applied · ${talking} interviewing.${appliedWeek ? ` You applied to ${appliedWeek} job${appliedWeek === 1 ? '' : 's'} this week. Nice work.` : ''}`), addJobPanel(go), next.node,
     h('div', { class: 'dcols' },
@@ -178,7 +189,7 @@ export async function trackingView(me, go) {
         h('div', { class: 'dtools' }, h('div', { class: 'search' }, icon('search'), search), h('label', { class: 'sort' }, 'Sort ', sorter)),
         h('p', { class: 'dlegend' }, h('b', null, 'Fit'), ' is how many of a job’s required skills your resume covers. The line on each bar is ', h('b', null, '75%'), ', a good score to apply at.'),
         h('div', { class: 'dhdr', 'aria-hidden': 'true' }, h('span', null, 'Role'), h('span', null, 'Fit'), h('span', null, 'Stage'), h('span', null, 'Action')), body),
-      h('aside', { 'aria-label': 'Progress', class: 'dside' }, side)));
+      h('aside', { 'aria-label': 'Progress', class: 'dside' }, side, nudge)));
   draw();
   if (wantAdd) { wantAdd = false; queueMicrotask(toggleAdd); }
   return host;

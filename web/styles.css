@@ -422,3 +422,14 @@ body { font-size: 16px; } .small { font-size: 15.5px; } .label { font-size: 14.5
 /* Skills: two ruled modules */
 .gapgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; align-items: start; } .gaplist { list-style: none; margin: 0; padding: 0; } .gaplist li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); } .gaplist li:last-child { border-bottom: 0; } .gaplist span { color: var(--muted); } .gaplist span.need { color: var(--red-d); font-weight: 700; }
 @media (max-width: 720px) { .gapgrid { grid-template-columns: 1fr; } }
+
+/* ---- Credits nudge: the one module that asks for money, drawn differently on purpose (heavy ink frame, black tab) so it is never mistaken for a status. Plain copy, no urgency. */
+.nudge { position: relative; border: 2px solid var(--ink); background: #fff; padding: 46px 20px 20px; margin: 18px 0; }
+.nudge .ntab { position: absolute; top: -2px; left: -2px; background: var(--ink); color: #fff; font-weight: 900; font-size: 15px; padding: 5px 14px; }
+.nudge h2 { font-size: 1.25rem; font-weight: 900; margin: 0 0 4px; } .nudge p { margin: 0 0 14px; color: var(--ink2); }
+.nudge .packs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; } .nudge .pack { border: 1px solid var(--line-strong); padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 4px; } .nudge .pack.best { border: 2px solid var(--ink); } .nudge .pack .price { font-size: 1.5rem; font-weight: 900; }
+.nudge .btn { align-self: flex-start; }
+/* Hidden setup checklist: a compact module that keeps naming the next step */
+.setup-mini { margin-top: 18px; } .setup-mini .count { margin: 0 0 8px; } .setup-mini .progress-track { margin: 0 0 12px; } .setup-mini p { margin: 0 0 10px; }
+/* the "What we changed" list: calm focus ring */
+.changes summary { cursor: pointer; font-weight: 800; padding: 10px 0; } .changes summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }

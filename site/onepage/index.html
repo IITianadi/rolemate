@@ -57,11 +57,45 @@ footer { border-top: 2px solid var(--ink); padding: 32px 0 calc(32px + env(safe-
 @media (max-width: 980px) { .hero { grid-template-columns: 1fr; } .g3, .g4 { grid-template-columns: 1fr 1fr; } .shots { grid-template-columns: 1fr; } nav.top .links { display: none; } nav.top .btn { margin-left: auto; } }
 @media (max-width: 640px) { body { font-size: 16px; } .g2, .g3, .g4, .pledges { grid-template-columns: 1fr; } .btn.lg { width: 100%; } .row { width: 100%; } footer .f { margin-left: 0; } nav.top .wrap { gap: 12px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* ---- Motion: functional, crisp, played once. Content is visible by default; motion only runs when the user allows it. */
+@media (prefers-reduced-motion: no-preference) {
+  :root { --ex: cubic-bezier(.16, 1, .3, 1); }
+  /* logo assembles, then the name wipes in */
+  .rm-ink { transform-box: fill-box; transform-origin: 50% 100%; animation: rm-grow .5s var(--ex) both; } .rm-red { animation: rm-drop .45s .12s var(--ex) both; }
+  .rm-box { stroke-dasharray: 1; animation: rm-draw .55s .3s var(--ex) both; } .rm-name { animation: rm-wipe .6s .65s var(--ex) both; }
+  @keyframes rm-grow { from { transform: scaleY(0); } } @keyframes rm-drop { from { opacity: 0; transform: translateY(-14px); } } @keyframes rm-draw { from { stroke-dashoffset: 1; } } @keyframes rm-wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  /* hero copy rises in order */
+  .hero h1 { animation: rise .7s .1s var(--ex) both; } .hero .lead { animation: rise .7s .25s var(--ex) both; } .hero .row { animation: rise .7s .4s var(--ex) both; } .hero .note { animation: rise .7s .5s var(--ex) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
+  /* the capture scene: a cursor clicks Capture, then the fit appears */
+  .proof .cap { position: relative; display: flex; align-items: center; margin: 4px 0 14px; min-height: 48px; }
+  .proof .capbtn { position: relative; display: inline-grid; background: #111; color: #fff; font-weight: 900; padding: 0 18px; min-height: 44px; align-items: center; animation: press .25s 1.35s var(--ex) both; }
+  .proof .capbtn span { grid-area: 1 / 1; } .proof .capbtn .l1 { animation: gone 0s 1.55s both; } .proof .capbtn .l2 { animation: show 0s 1.55s both; opacity: 0; }
+  .proof .capbtn::after { content: ""; position: absolute; inset: -2px; border: 2px solid #d0021b; opacity: 0; animation: ripple .6s 1.35s ease-out both; }
+  .proof .cur { position: absolute; left: 0; top: 0; animation: glide 1.35s .5s var(--ex) both; }
+  .proof .tab { animation: rm-wipe .5s .1s var(--ex) both; } .proof .role { animation: rise .5s 1.6s var(--ex) both; }
+  .proof .meter i { transform-origin: 0 50%; animation: fillbar 1.1s 1.7s var(--ex) both; } .proof .meter::after { animation: pop .3s 2.7s var(--ex) both; }
+  .proof .fitnum { animation: rise .5s 1.7s var(--ex) both; } .proof .key { animation: rise .5s 2.5s var(--ex) both; } .proof .missing { animation: rise .5s 2.8s var(--ex) both; }
+  .proof .pipe > div { animation: rise .45s calc(3s + var(--i, 0) * .08s) var(--ex) both; }
+  @keyframes press { 50% { transform: scale(.94); } } @keyframes gone { to { opacity: 0; } } @keyframes show { to { opacity: 1; } } @keyframes ripple { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.25); } }
+  @keyframes glide { from { transform: translate(160px, 90px); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } to { transform: translate(60px, 18px); opacity: 0; } }
+  @keyframes fillbar { from { transform: scaleX(0); } } @keyframes pop { from { opacity: 0; transform: scaleY(0); } }
+  /* scroll reveals (the page adds .js, so nothing is hidden without script) */
+  .js [data-r] { opacity: 0; transform: translateY(16px); transition: opacity .6s var(--ex), transform .6s var(--ex); transition-delay: calc(var(--i, 0) * 70ms); }
+  .js [data-r].in { opacity: 1; transform: none; }
+  .js [data-r] > .tab { clip-path: inset(0 100% 0 0); transition: clip-path .5s .15s var(--ex); } .js [data-r].in > .tab { clip-path: inset(0 0 0 0); }
+  .js [data-r] .meter i { transition: width 1s .2s var(--ex); } .js figure[data-r] img { clip-path: inset(0 100% 0 0); transition: clip-path .9s .1s var(--ex); } .js figure[data-r].in img { clip-path: inset(0 0 0 0); }
+}
+@media (prefers-reduced-motion: reduce) { .proof .cap .cur { display: none; } }
+.proof .cap .l1 { display: block; } .proof .cap .l2 { display: block; }
+@media (prefers-reduced-motion: reduce) { .proof .capbtn .l1 { display: none; } }
+@media (prefers-reduced-motion: no-preference) { .proof .capbtn .l2 { opacity: 0; } }
 </style>
 </head>
 <body>
 <nav class="top" aria-label="Main"><div class="wrap">
-  <a class="logo" href="#top" aria-label="Rolemate home"><svg viewBox="0 0 230 56" width="140" height="34" role="img" aria-label="Rolemate"><rect x="0" y="4" width="22" height="48" fill="#111"/><rect x="26" y="4" width="22" height="22" fill="#d0021b"/><rect x="27.5" y="31.5" width="19" height="19" fill="none" stroke="#111" stroke-width="3"/><text x="62" y="40" textLength="164" lengthAdjust="spacingAndGlyphs" font-family="'Noto Sans JP','Helvetica Neue',Arial,sans-serif" font-weight="900" font-size="32" fill="#111">Rolemate</text></svg></a>
+  <a class="logo" href="#top" aria-label="Rolemate home"><svg viewBox="0 0 230 56" width="140" height="34" role="img" aria-label="Rolemate"><rect class="rm-ink" x="0" y="4" width="22" height="48" fill="#111"/><rect class="rm-red" x="26" y="4" width="22" height="22" fill="#d0021b"/><rect class="rm-box" pathLength="1" x="27.5" y="31.5" width="19" height="19" fill="none" stroke="#111" stroke-width="3"/><g class="rm-name"><text x="62" y="40" textLength="164" lengthAdjust="spacingAndGlyphs" font-family="'Noto Sans JP','Helvetica Neue',Arial,sans-serif" font-weight="900" font-size="32" fill="#111">Rolemate</text></g></svg></a>
   <div class="links"><a href="#how">How it works</a><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
   <a class="btn primary sm" href="https://app.rolemate.in">Start free</a>
 </div></nav>
@@ -76,8 +110,9 @@ footer { border-top: 2px solid var(--ink); padding: 32px 0 calc(32px + env(safe-
   </div>
   <div class="mod proof" role="group" aria-label="A sample job: 79 percent fit, one missing skill, and the pipeline stages.">
     <span class="tab">Fit</span>
+    <div class="cap" aria-hidden="true"><span class="capbtn"><span class="l1">Capture this job</span><span class="l2">Captured</span></span><svg class="cur" viewBox="0 0 24 24" width="26" height="26"><path d="M4 2l15 9-7 1.5L9 20z" fill="#111" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
     <div class="role"><b>Senior Backend Engineer</b><span>Acme Payments · Sample job</span></div>
-    <span class="fitnum">79<small>%</small></span>
+    <span class="fitnum"><span data-count="79">79</span><small>%</small></span>
     <div class="meter" aria-hidden="true"><i style="width:79%"></i></div>
     <div class="key"><span>0</span><span><b>75%</b> is a good score to apply at</span><span>100</span></div>
     <p class="missing"><b>Missing:</b> Kubernetes</p>
@@ -157,9 +192,28 @@ footer { border-top: 2px solid var(--ink); padding: 32px 0 calc(32px + env(safe-
 </main>
 
 <footer><div class="wrap">
-  <a class="logo" href="#top" aria-label="Rolemate home"><svg viewBox="0 0 230 56" width="115" height="28" role="img" aria-label="Rolemate"><rect x="0" y="4" width="22" height="48" fill="#111"/><rect x="26" y="4" width="22" height="22" fill="#d0021b"/><rect x="27.5" y="31.5" width="19" height="19" fill="none" stroke="#111" stroke-width="3"/><text x="62" y="40" textLength="164" lengthAdjust="spacingAndGlyphs" font-family="'Noto Sans JP','Helvetica Neue',Arial,sans-serif" font-weight="900" font-size="32" fill="#111">Rolemate</text></svg></a>
+  <a class="logo" href="#top" aria-label="Rolemate home"><svg viewBox="0 0 230 56" width="115" height="28" role="img" aria-label="Rolemate"><rect class="rm-ink" x="0" y="4" width="22" height="48" fill="#111"/><rect class="rm-red" x="26" y="4" width="22" height="22" fill="#d0021b"/><rect class="rm-box" pathLength="1" x="27.5" y="31.5" width="19" height="19" fill="none" stroke="#111" stroke-width="3"/><g class="rm-name"><text x="62" y="40" textLength="164" lengthAdjust="spacingAndGlyphs" font-family="'Noto Sans JP','Helvetica Neue',Arial,sans-serif" font-weight="900" font-size="32" fill="#111">Rolemate</text></g></svg></a>
   <span>© 2026 Rolemate</span>
   <div class="f"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="contact.html">Contact</a></div>
 </div></footer>
+<script>
+// Motion is progressive: without this script (or with reduced motion) everything is simply visible.
+(function () {
+  var calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (calm || !('IntersectionObserver' in window)) return;
+  document.documentElement.classList.add('js');
+  var targets = document.querySelectorAll('.mod:not(.proof), .head, .shots figure, .trust .wrap > *, .final .wrap > *, details');
+  targets.forEach(function (el, k) { el.setAttribute('data-r', ''); el.style.setProperty('--i', k % 4); });
+  document.querySelectorAll('.pipe > div').forEach(function (el, k) { el.style.setProperty('--i', k); });
+  var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }); }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+  targets.forEach(function (el) { io.observe(el); });
+  // the fit number counts up once the capture scene reaches it
+  var n = document.querySelector('[data-count]');
+  if (n) { var to = +n.getAttribute('data-count'), t0 = null; n.textContent = '0';
+    setTimeout(function () { requestAnimationFrame(function tick(t) { t0 = t0 || t; var p = Math.min(1, (t - t0) / 1100); n.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(tick); }); }, 1700); }
+  // failsafe: never leave content hidden
+  setTimeout(function () { targets.forEach(function (el) { el.classList.add('in'); }); }, 6000);
+})();
+</script>
 </body>
 </html>

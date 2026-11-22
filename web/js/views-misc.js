@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import { api, download, setToken } from './api.js';
 import { resumeEditor } from './editor.js';
 import { EXT_STEPS } from './views-profile.js';
-import { pageHead, emptyState, nextStep, paywall, packButtons } from './ui.js';
+import { pageHead, emptyState, nextStep, paywall, packButtons, creditNudge } from './ui.js';
 
 export async function resumesView() {
   const { resumes } = await api('/api/resumes');
@@ -78,7 +78,7 @@ export async function settingsView(me, go, open) {
       paid && h('div', { class: 'info' }, 'Thank you. Your payment is being confirmed and your credits will show here in a moment.', ' ', h('a', { href: '#', onclick: async (e) => { e.preventDefault(); location.reload(); } }, 'Refresh')),
       h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('div', null, h('h2', null, 'Credits'), h('p', null, 'One credit covers one job: saving it, tailoring, interview prep and Ask AI for that job.')), h('span', { class: 'chip primary' }, q.limit == null ? 'Unlimited' : `${q.remaining} left`)),
         q.limit != null && h('div', null, h('div', { class: 'row between small', style: 'margin-bottom:6px' }, h('span', null, 'Credits used'), h('span', { class: 'muted' }, `${q.used} of ${q.limit}`)), h('div', { class: 'meter' }, h('i', { style: `width:${pct}%` })))),
-      q.limit != null && h('div', { class: 'card' }, h('h2', null, 'Get more credits'), h('p', { class: 'muted small' }, 'Pay once, no subscription. Credits never expire.'), packButtons(q)));
+      q.limit != null && creditNudge(q, { title: 'Get more credits', body: 'Pay once for a pack. No subscription, and credits never expire.' }));
   };
 
   const tabs = [['account', 'Account', account], ['extension', 'Extension', extension], ['billing', 'Plan', billing]];

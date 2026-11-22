@@ -67,11 +67,20 @@ export function packButtons(quota) {
     h('button', { class: 'btn primary', onclick: (e) => buy(p.id, e.currentTarget) }, 'Buy'))));
 }
 
+// Credits: one distinct, plain-spoken module wherever Rolemate asks for money. It states what a credit buys and what the
+// packs cost, with no urgency, no discount language and no countdown. `low` is a heads-up; zero credits is the paywall.
+export const creditNudge = (quota, { title, body, buy = true } = {}) => {
+  const left = quota?.remaining;
+  const cheapest = (quota?.packs || []).reduce((m, p) => (m == null || p.price < m ? p.price : m), null);
+  return h('section', { class: 'nudge', 'aria-label': 'Credits' }, h('div', { class: 'ntab' }, 'Credits'),
+    h('h2', null, title || (left === 0 ? 'You’re out of credits' : `${left} credit${left === 1 ? '' : 's'} left`)),
+    h('p', null, body || `One credit covers one job: saving it, tailoring, interview prep and Ask AI for that job.${cheapest != null ? ` Packs start at ₹${cheapest}. No subscription, and credits never expire.` : ''}`),
+    buy && packButtons(quota));
+};
+
 // Shown when the credits are used up.
 export function paywall(quota, extra) {
-  return h('div', { class: 'card paywall' }, h('h2', null, 'You’re out of credits'),
-    h('p', { class: 'muted' }, `${extra || 'Pay now to keep going.'} One credit covers one job: saving it, tailoring, interview prep and Ask AI for that job.`),
-    packButtons(quota));
+  return creditNudge(quota, { title: 'You’re out of credits', body: `${extra || 'Buy a pack to keep going.'} One credit covers one job: saving it, tailoring, interview prep and Ask AI for that job.` });
 }
 
 // Server timestamps are UTC "YYYY-MM-DD HH:MM:SS". `ago` is short and human; `exact` goes in the tooltip.

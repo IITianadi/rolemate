@@ -213,6 +213,18 @@ function extractPage() {
 const sitesList = () => el('details', { class: 'sites' }, el('summary', {}, `See all ${SITES.length} supported sites`),
   el('p', {}, SITES.map((s) => s.name).join(', ') + '.'));
 
+// Has this account already saved the job in the active tab? Matches on the URL (ignoring #fragments and tracking
+// parameters) or the LinkedIn job id. A failed lookup just means we offer a normal capture.
+const jobIdOf = (u) => { try { const x = new URL(u); return x.searchParams.get('currentJobId') || (x.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d+)/) || [])[1] || ''; } catch { return ''; } };
+const plainUrl = (u) => { try { const x = new URL(u); return x.origin + x.pathname.replace(/\/$/, ''); } catch { return ''; } };
+async function savedJobFor(url) {
+  try {
+    const { jobs } = await Promise.race([callApi('/api/jobs'), new Promise((_, no) => setTimeout(no, 1500))]);
+    const id = jobIdOf(url), plain = plainUrl(url);
+    return jobs.find((j) => (id && jobIdOf(j.url) === id) || (plain && plainUrl(j.url) === plain && !id)) || null;
+  } catch { return null; }
+}
+
 async function home() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const f = await footer();
@@ -224,7 +236,19 @@ async function home() {
     return show(message('stop', 'This site isn’t supported yet', `Rolemate captures jobs from ${SITES.length} job sites and career pages, like LinkedIn, Naukri and Indeed.`,
       el('button', { class: 'btn', onclick: () => openTab('/#/tracking/add') }, 'Paste the job in Rolemate instead')), sitesList(), f);
   }
+  const seen = site.isJobUrl ? await savedJobFor(tab.url) : null;
   const title = String(tab.title || '').replace(/\s*[|–-]\s*(LinkedIn|Naukri\.com|Indeed\.com|Glassdoor|foundit).*$/i, '').trim();
+  if (seen) {
+    const fit = seen.match?.score != null ? ` · ${seen.match.score}% fit` : '';
+    return show(el('section', { class: 'ready mod' },
+      el('span', { class: 'tab' }, 'Already captured'),
+      el('h1', {}, 'You saved this job'),
+      title && el('p', { class: 'jobline' }, title),
+      el('p', {}, `It’s in your dashboard as ${seen.status}${fit}. Capture again if the posting changed; it updates the saved job and costs no credit.`),
+      el('div', { class: 'row' },
+        el('button', { class: 'btn primary', onclick: () => openTab(`/#/job/${seen.id}`) }, 'Open in dashboard'),
+        el('button', { class: 'btn', onclick: () => capture(tab, site) }, 'Capture again'))), f);
+  }
   show(el('section', { class: 'ready mod' },
     el('span', { class: 'tab' }, site.isJobUrl ? `${site.name} job` : site.name),
     el('h1', {}, site.isJobUrl ? 'Ready to capture' : 'Open the job you want'),

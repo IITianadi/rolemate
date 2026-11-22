@@ -71,7 +71,7 @@ export async function jobView(id, me, go) {
           h('div', { class: 'muted small', style: 'margin-top:2px' }, 'Same layout. Nothing added that isn’t yours.'),
           h('div', { class: 'row', style: 'margin-top:16px;gap:10px' }, h('button', { class: 'btn primary', onclick: () => dl(r) }, 'Download PDF'), h('a', { class: 'btn', href: `#/resume/${r.id}` }, 'Edit'),
             h('button', { class: 'btn ghost sm', onclick: tailor, title: 'Tailor again from your current resume' }, icon('refresh', 15), 'Redo')))),
-        n > 0 && h('details', { class: 'changes' }, h('summary', null, 'See what we changed'),
+        n > 0 && h('details', { class: 'changes', open: true }, h('summary', null, 'What we changed for this job'),
           h('ul', null, r.changes.map((c) => h('li', null, c)), h('li', { class: 'keep' }, '✓ Layout, fonts and sections unchanged'))),
         job.resumes.length > 1 && h('div', { class: 'small muted', style: 'margin-top:12px' }, 'Earlier: ', job.resumes.slice(1).map((x) => h('a', { href: `#/resume/${x.id}`, style: 'margin-right:10px' }, fmtDate(x.created_at) || `#${x.id}`)))]
       : h('div', { class: 'resumeprev' }, paper, h('div', null, h('h2', { style: 'font-size:1.05rem;margin:0' }, 'Your resume for this job'),
