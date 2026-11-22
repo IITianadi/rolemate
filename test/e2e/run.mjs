@@ -137,8 +137,8 @@ try {
   });
 
   await step('job page: Kubernetes is the only must-have gap; confirming it updates the score', async () => {
-    await dash.goto(`${DASH}/#/tracking`); await dash.waitForSelector('.board');
-    await dash.click('.jcard:has-text("Senior Backend")'); await dash.waitForSelector('.fit');
+    await dash.goto(`${DASH}/#/tracking`); await dash.waitForSelector('.djobs');
+    await dash.click('.djob:has-text("Senior Backend")'); await dash.waitForSelector('.fit');
     const gaps = await dash.locator('.gap .chip').allInnerTexts();
     assert.ok(gaps.includes('Kubernetes'), `gaps were ${gaps}`);
     // Requirements split across list items must all be detected (this fails if line breaks are lost in capture).
@@ -169,18 +169,18 @@ try {
   });
 
   await step('the three captures are three separate jobs on the board', async () => {
-    await dash.goto(`${DASH}/#/tracking`); await dash.waitForSelector('.board');
-    const titles = await dash.locator('.jcard .t').allInnerTexts();
+    await dash.goto(`${DASH}/#/tracking`); await dash.waitForSelector('.djobs');
+    const titles = await dash.locator('.djob h3 a').allInnerTexts();
     for (const t of ['Senior Backend Engineer', 'Product Analyst', 'Product Management Intern', 'Product Manager II']) assert.ok(titles.includes(t), `${t} in ${titles}`);
-    await shot(dash, '05-board');
-    await dash.click('.seg >> text=List'); await dash.waitForSelector('table.t'); await shot(dash, '05b-table'); await dash.click('.seg >> text=Board'); await dash.waitForSelector('.board');
+    await shot(dash, '05-jobs');
+    await shot(dash, '05b-list');
     await assertClean(dash, 'tracking');
-    const cos = await dash.locator('.jcard:has-text("Product Manager II") .c').allInnerTexts();
-    assert.ok(cos.length >= 2 && cos.every((c) => c === 'Kuku'), `company shown on the cards was ${JSON.stringify(cos)}`);
+    const cos = await dash.locator('.djob:has-text("Product Manager II") .drole p:not(.hint)').allInnerTexts();
+    assert.ok(cos.length >= 2 && cos.every((c) => c.startsWith('Kuku')), `company shown on the cards was ${JSON.stringify(cos)}`);
   });
 
   await step('interview prep: every question has a drafted answer, nothing asks the user for input', async () => {
-    await dash.click('.jcard:has-text("Product Management Intern")'); await dash.waitForSelector('.fit');
+    await dash.click('.djob:has-text("Product Management Intern")'); await dash.waitForSelector('.fit');
     await dash.click('.tabs >> text=Interview prep');
     await dash.waitForSelector('.oneliner', { timeout: 30000 });
     await shot(dash, '06-prep', true);

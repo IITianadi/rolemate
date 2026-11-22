@@ -1,7 +1,7 @@
 import { h, toast, clear } from './dom.js';
 import { api } from './api.js';
 import { icon } from './icons.js';
-import { pageHead, emptyState, nextStep, logoMark, sourceName, ago, exact, isFresh } from './ui.js';
+import { pageHead, emptyState, nextStep, logoMark, sourceName, ago, exact, parseTs } from './ui.js';
 
 export const STATUS_LABEL = { saved: 'Saved', applied: 'Applied', screening: 'Screening call', interview: 'Interview', offer: 'Offer', rejected: 'Rejected' };
 export const bandOf = (m) => m?.band || 'unknown';
@@ -35,14 +35,19 @@ export function requestAdd(go) {
   wantAdd = true; go('#/tracking');
 }
 
-// One sentence about what to do now.
+// One sentence about what to do now: interviews first, then the best saved job (apply at 75% or more, otherwise tailor first).
+const label = (j) => [j.title, j.company].filter(Boolean).join(' at ');
 function suggestion(jobs, open) {
-  const label = (j) => [j.title, j.company].filter(Boolean).join(' at ');
+  const talk = jobs.find((j) => ['interview', 'screening', 'offer'].includes(j.status));
   const best = jobs.filter((j) => j.status === 'saved').sort((a, b) => (b.match?.score ?? -1) - (a.match?.score ?? -1))[0];
-  const talk = jobs.find((j) => ['screening', 'interview'].includes(j.status));
-  if (talk) return nextStep({ label: 'Next', title: `Prepare for ${label(talk)}`, sub: STATUS_LABEL[talk.status], actions: [h('a', { class: 'btn primary', href: `#/job/${talk.id}` }, 'Open prep')] });
-  if (best) return nextStep({ label: 'Next', title: `Apply to ${label(best)}`, sub: best.match?.score != null ? `${best.match.score}% fit${best.resumes.length ? ', resume ready' : ''}` : 'Review the job', actions: [h('a', { class: 'btn primary', href: `#/job/${best.id}` }, 'Open job')] });
-  return nextStep({ label: 'Next', title: 'Add your next job', sub: 'Paste a description or use the extension', actions: [h('button', { class: 'btn primary', onclick: open }, 'Add job')] });
+  if (talk) return { id: talk.id, node: nextStep({ label: 'Next', title: `Prepare for ${label(talk)}`, sub: 'Likely questions, with answers drawn from your resume.', actions: [h('a', { class: 'btn', href: `#/job/${talk.id}` }, 'Open prep')] }) };
+  if (best) {
+    const sc = best.match?.score, ready = sc != null && sc >= 75, miss = (best.match?.missingMust || []).slice(0, 3).join(', ');
+    return { id: best.id, node: nextStep({ label: 'Next', title: `${ready ? 'Apply to' : 'Tailor your resume for'} ${label(best)}`,
+      sub: sc == null ? 'Review the job and your fit.' : ready ? `${sc}% fit${best.resumes.length ? '. Your tailored resume is ready. You press apply yourself.' : ''}` : `${sc}% fit${miss ? `. Missing: ${miss}` : ''}`,
+      actions: [h('a', { class: 'btn', href: `#/job/${best.id}` }, ready ? 'Open resume' : 'Tailor resume')] }) };
+  }
+  return { id: null, node: nextStep({ label: 'Next', title: 'Add your next job', sub: 'Paste a description or use the extension.', actions: [h('button', { class: 'btn', onclick: open }, 'Add job')] }) };
 }
 
 // First-run checklist: five steps from "resume uploaded" to "first application". Progress comes from real data
@@ -104,53 +109,75 @@ export async function trackingView(me, go) {
     return host;
   }
 
-  const applied = jobs.filter((j) => j.status !== 'saved').length;
-  const talking = jobs.filter((j) => ['screening', 'interview', 'offer'].includes(j.status)).length;
-  let view = store.get('tk_view', 'board'); let q = ''; let stage = 'all';
-  const body = h('div');
-  const search = h('input', { type: 'search', placeholder: 'Search', 'aria-label': 'Search jobs', oninput: (e) => { q = e.target.value.toLowerCase(); draw(); } });
-  const filter = h('select', { 'aria-label': 'Filter by stage', onchange: (e) => { stage = e.target.value; draw(); } }, h('option', { value: 'all' }, 'All stages'), statuses.map((s) => h('option', { value: s }, STATUS_LABEL[s])));
-  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'View' },
-    h('button', { class: view === 'board' ? 'on' : '', onclick: () => setView('board') }, 'Board'), h('button', { class: view === 'table' ? 'on' : '', onclick: () => setView('table') }, 'List'));
-  const setView = (v) => { view = v; store.set('tk_view', v); [...seg.children].forEach((b) => b.classList.toggle('on', b.textContent === (v === 'board' ? 'Board' : 'List'))); draw(); };
+  // Jobs in the new look: fit first, what is missing, one clear action per row, valid stage moves only.
+  const NEXT = { saved: ['applied'], applied: ['screening', 'rejected'], screening: ['interview', 'rejected'], interview: ['offer', 'rejected'], offer: ['rejected'], rejected: [] };
+  const n = (k) => jobs.filter((j) => j.status === k).length;
+  const talking = n('screening') + n('interview');
+  const weekAgo = Date.now() - 7 * 864e5;
+  const appliedWeek = jobs.filter((j) => j.status !== 'saved' && j.appliedAt && (parseTs(j.appliedAt)?.getTime() || 0) > weekAgo).length;
+  let q = '', stage = 'all', sort = 'action';
+  const body = h('div'), pipe = h('div', { class: 'dpipe', role: 'group', 'aria-label': 'Filter by stage' });
+  const search = h('input', { type: 'search', placeholder: 'Search role or company', 'aria-label': 'Search jobs', oninput: (e) => { q = e.target.value.toLowerCase(); draw(); } });
+  const sorter = h('select', { 'aria-label': 'Sort jobs', onchange: (e) => { sort = e.target.value; draw(); } },
+    h('option', { value: 'action' }, 'Action needed'), h('option', { value: 'fit' }, 'Highest fit'), h('option', { value: 'new' }, 'Newest'));
+  const score = (j) => j.match?.score ?? -1;
+  const rank = (j) => (j.status === 'interview' || j.status === 'offer' ? 0 : j.status === 'screening' ? 1 : j.status === 'saved' ? (score(j) >= 75 ? 2 : 3) : j.status === 'applied' ? 4 : 5);
+  const visible = () => jobs.filter((j) => (stage === 'all' || j.status === stage) && (!q || `${j.title} ${j.company}`.toLowerCase().includes(q)))
+    .sort(sort === 'fit' ? (a, b) => score(b) - score(a) : sort === 'new' ? (a, b) => b.id - a.id : (a, b) => rank(a) - rank(b) || score(b) - score(a));
 
-  const move = async (id, st) => { try { await api(`/api/jobs/${id}`, { method: 'PATCH', body: { status: st } }); toast(`Moved to ${STATUS_LABEL[st]}`); go('#/tracking'); } catch (x) { toast(x.message, true); } };
-  const visible = () => jobs.filter((j) => (stage === 'all' || j.status === stage) && (!q || `${j.title} ${j.company}`.toLowerCase().includes(q)));
-
-  // Saved date, plus when it was applied once it has been.
+  const move = async (j, st) => {
+    const was = j.status;
+    try {
+      await api(`/api/jobs/${j.id}`, { method: 'PATCH', body: { status: st } });
+      toast(`${label(j)} moved to ${STATUS_LABEL[st]}.`, false, { label: 'Undo', fn: async () => { try { await api(`/api/jobs/${j.id}`, { method: 'PATCH', body: { status: was } }); } catch (x) { toast(x.message, true); } go('#/tracking'); } });
+      go('#/tracking');
+    } catch (x) { toast(x.message, true); }
+  };
   const when = (j) => j.appliedAt && j.status !== 'saved' ? `Applied ${ago(j.appliedAt)}` : `Saved ${ago(j.createdAt)}`;
-  function board(list) {
-    const el = h('div', { class: 'board' });
-    for (const st of statuses) {
-      const col = h('div', { class: 'col', 'data-status': st,
-        ondragover: (e) => { e.preventDefault(); col.classList.add('over'); }, ondragleave: () => col.classList.remove('over'),
-        ondrop: (e) => { e.preventDefault(); col.classList.remove('over'); const id = e.dataTransfer.getData('text/plain'); const job = jobs.find((j) => String(j.id) === id); if (job && job.status !== st) move(id, st); } },
-        h('h3', null, h('span', null, STATUS_LABEL[st]), h('b', null, list.filter((j) => j.status === st).length)));
-      for (const [ci, j] of list.filter((x) => x.status === st).entries()) {
-        col.append(h('a', { class: 'jcard', style: `--i:${Math.min(ci, 8)}`, href: `#/job/${j.id}`, draggable: true, ondragstart: (e) => e.dataTransfer.setData('text/plain', String(j.id)) },
-          h('div', { class: 'row between', style: 'gap:8px;flex-wrap:nowrap;align-items:flex-start' }, h('div', { class: 'row', style: 'gap:10px;flex-wrap:nowrap;align-items:flex-start' }, logoMark(j, 32), h('div', { class: 't' }, j.title || 'Untitled role')), scorePill(j.match)),
-          h('div', { class: 'c' }, j.company || 'Company not detected', sourceName(j) ? h('span', { class: 'faint' }, ` · ${sourceName(j)}`) : null),
-          h('div', { class: 'when', title: `Saved ${exact(j.createdAt)}` }, isFresh(j.createdAt) && h('span', { class: 'newdot' }, 'New'), when(j))));
-      }
-      el.append(col);
+  const next = suggestion(jobs, toggleAdd);
+
+  function drawPipe() {
+    clear(pipe);
+    for (const [k, l] of [['all', 'All'], ...statuses.map((s) => [s, STATUS_LABEL[s]])]) {
+      const c = k === 'all' ? jobs.length : n(k);
+      pipe.append(h('button', { class: c ? '' : 'dim', 'aria-pressed': String(stage === k), onclick: () => { stage = k; draw(); } }, l, ' ', h('b', null, c)));
     }
-    return el;
+  }
+  function row(j) {
+    const off = j.status === 'rejected', sc = j.match?.score, band = off ? 'off' : bandOf(j.match);
+    const miss = (j.match?.missingMust || []).slice(0, 3);
+    const hint = off ? 'Not this time. Your notes and prep stay saved.' : miss.length ? [h('b', null, 'Missing: '), miss.join(', ')] : j.status === 'saved' && sc >= 75 ? [h('b', null, 'Ready to apply.'), ' Your tailored resume is done.'] : null;
+    const act = j.status === 'saved' ? (sc >= 75 ? h('button', { class: 'btn', onclick: () => move(j, 'applied') }, 'Mark applied') : h('a', { class: 'btn', href: `#/job/${j.id}` }, 'Tailor resume')) : null;
+    const opts = [j.status, ...(NEXT[j.status] || [])];
+    return h('li', { class: `djob${off ? ' off' : ''}` },
+      h('div', { class: 'drole' }, logoMark(j, 40), h('div', null,
+        h('h3', null, h('a', { href: `#/job/${j.id}` }, j.title || 'Untitled role'), j.id === next.id && h('span', { class: 'dmark' }, 'Next')),
+        h('p', { title: `Saved ${exact(j.createdAt)}` }, [j.company || 'Company not detected', sourceName(j), when(j)].filter(Boolean).join(' · ')),
+        hint && h('p', { class: 'hint' }, hint), act && h('div', { class: 'dact' }, act))),
+      h('div', { class: `dfit ${band}` }, h('span', null, sc == null ? 'No score' : `${sc}% `, sc != null && h('small', null, 'fit')),
+        sc != null && h('div', { class: 'dmeter', role: 'meter', 'aria-label': `Fit for ${label(j)}`, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': sc }, h('i', { style: `width:${sc}%` }))),
+      h('div', { class: 'dstage' }, h('select', { 'aria-label': `Move ${label(j)} to a later stage`, disabled: opts.length < 2, onchange: (e) => { if (e.target.value !== j.status) move(j, e.target.value); } },
+        opts.map((k, i) => h('option', { value: k, selected: i === 0 }, i === 0 ? STATUS_LABEL[k] : `Move to ${STATUS_LABEL[k]}`)))));
+  }
+  function draw() {
+    drawPipe(); clear(body);
+    const v = visible();
+    body.append(h('ul', { class: 'djobs' }, v.length ? v.map(row) : h('li', { class: 'dempty' }, h('b', null, 'No jobs match'), 'Nothing fits that search and stage. ',
+      h('button', { class: 'btn link', onclick: () => { stage = 'all'; q = ''; search.value = ''; draw(); } }, 'Clear filters'))));
   }
 
-  function table(list) {
-    if (!list.length) return h('div', { class: 'card empty' }, h('p', { class: 'muted', style: 'margin:0' }, 'No jobs match.'));
-    return h('div', { class: 'card flush', style: 'overflow-x:auto' }, h('table', { class: 't' },
-      h('thead', null, h('tr', null, ['Role', 'Fit', 'Saved', 'Stage'].map((x) => h('th', null, x)))),
-      h('tbody', null, list.map((j) => h('tr', { onclick: (e) => { if (!e.target.closest('select')) location.hash = `#/job/${j.id}`; } },
-        h('td', null, h('div', { class: 'row', style: 'gap:12px;flex-wrap:nowrap' }, logoMark(j, 36), h('div', null, h('div', { style: 'font-weight:600' }, j.title || 'Untitled role'), h('div', { class: 'muted small' }, j.company || 'Company not detected', sourceName(j) ? ` · ${sourceName(j)}` : '')))),
-        h('td', null, scorePill(j.match)),
-        h('td', { class: 'small muted', title: exact(j.createdAt), style: 'white-space:nowrap' }, isFresh(j.createdAt) && h('span', { class: 'newdot' }, 'New'), ago(j.createdAt)),
-        h('td', null, h('select', { 'aria-label': 'Stage', onchange: (e) => move(j.id, e.target.value) }, statuses.map((s) => h('option', { value: s, selected: s === j.status }, STATUS_LABEL[s])))))))));
-  }
-
-  function draw() { clear(body); const list = visible(); body.append(view === 'board' ? board(list) : table(list)); }
-  host.append(pageHead('Jobs', `${jobs.length} saved · ${applied} applied · ${talking} in conversation`), addJobPanel(go), checklist(me, jobs, go) || suggestion(jobs, toggleAdd),
-    h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search'), search), filter, h('div', { class: 'grow' }), seg), body);
+  const list = checklist(me, jobs, go);
+  const side = list || h('div', { class: 'dside' }, h('h2', null, 'This week'),
+    h('div', { class: 'dweek' }, h('b', null, `${appliedWeek} application${appliedWeek === 1 ? '' : 's'} sent`), h('p', null, appliedWeek >= 4 ? 'A strong week. Keep the interviews first.' : 'One more good-fit job today keeps you moving.')),
+    credits != null && h('div', { class: 'dweek' }, h('b', null, `${credits} credit${credits === 1 ? '' : 's'} left`), h('p', null, 'One credit covers one job: save, tailor, prep and chat. Credits never expire.'), h('a', { href: '#/settings' }, 'Buy more credits')));
+  host.classList.add('dash');
+  host.append(pageHead('Jobs', `${n('saved')} saved · ${n('applied')} applied · ${talking} interviewing.${appliedWeek ? ` You applied to ${appliedWeek} job${appliedWeek === 1 ? '' : 's'} this week. Nice work.` : ''}`), addJobPanel(go), next.node,
+    h('div', { class: 'dcols' },
+      h('section', { 'aria-label': 'Your jobs' }, pipe,
+        h('div', { class: 'dtools' }, h('div', { class: 'search' }, icon('search'), search), h('label', { class: 'sort' }, 'Sort ', sorter)),
+        h('p', { class: 'dlegend' }, h('b', null, 'Fit'), ' is how many of a job’s required skills your resume covers. The line on each bar is ', h('b', null, '75%'), ', a good score to apply at.'),
+        h('div', { class: 'dhdr', 'aria-hidden': 'true' }, h('span', null, 'Role'), h('span', null, 'Fit'), h('span', null, 'Stage')), body),
+      h('aside', { 'aria-label': 'Progress' }, side)));
   draw();
   if (wantAdd) { wantAdd = false; queueMicrotask(toggleAdd); }
   return host;

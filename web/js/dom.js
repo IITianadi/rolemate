@@ -22,10 +22,11 @@ export function append(el, ...kids) {
 export const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
 export const $ = (sel, root = document) => root.querySelector(sel);
 
-export function toast(msg, isErr = false) {
+export function toast(msg, isErr = false, action = null) {
   const t = h('div', { class: 'toast' + (isErr ? ' err' : ''), role: isErr ? 'alert' : 'status' }, msg);
+  if (action) t.append(h('button', { class: 'undo', onclick: () => { t.remove(); action.fn(); } }, action.label));
   document.getElementById('toasts').append(t);
-  setTimeout(() => t.remove(), isErr ? 6000 : 3200);
+  setTimeout(() => t.remove(), isErr ? 6000 : action ? 7000 : 3200);
 }
 
 export const spinner = (text) => h('div', { class: 'muted', style: 'padding:32px;text-align:center;display:flex;gap:10px;justify-content:center;align-items:center' }, h('span', { class: 'spin' }), text || 'Loading…');

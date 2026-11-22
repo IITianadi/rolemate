@@ -28,8 +28,8 @@ const step = async (name, fn) => { try { await fn(); results.push(['✔', name])
 
 await page.goto(`${base}#d-tracking`);
 await step('opens signed in on the board with six sample jobs', async () => {
-  await page.waitForSelector('.jcard');
-  assert.equal(await page.locator('.jcard').count(), 6);
+  await page.waitForSelector('.djob h3 a');
+  assert.equal(await page.locator('.djob h3 a').count(), 6);
   assert.ok(await page.locator('.demo-pill').isVisible());
   await shot('board');
 });
@@ -42,7 +42,7 @@ await step('logo animates on a fresh load, stays still when moving between pages
   assert.equal(await anims(), 0, 'no replay when navigating inside the app');
   await page.goto(`${base}#d-tracking`); await page.reload(); await page.waitForSelector('.nav .logo svg');
   assert.ok(await anims() > 0, 'plays again after a refresh');
-  await page.waitForSelector('.jcard');
+  await page.waitForSelector('.djob h3 a');
 });
 await step('hovering the logo plays the animation again; clicking only navigates', async () => {
   const anims = () => page.evaluate(() => document.querySelector('.nav .logo svg').getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length);
@@ -52,11 +52,11 @@ await step('hovering the logo plays the animation again; clicking only navigates
   await page.click('.navtabs >> text=Skills'); await page.waitForSelector('.navitem.active:has-text("Skills")'); await page.waitForTimeout(3600);
   assert.equal(await anims(), 0, 'moving between pages does not replay');
   await page.hover('.nav .logo'); await page.waitForTimeout(200); assert.ok(await anims() > 0, 'hover replays it on another page');
-  await page.waitForTimeout(3600); await page.mouse.move(600, 400); await page.click('.nav .logo'); await page.waitForSelector('.jcard');
+  await page.waitForTimeout(3600); await page.mouse.move(600, 400); await page.click('.nav .logo'); await page.waitForSelector('.djob h3 a');
   await page.mouse.move(600, 400); await page.waitForTimeout(3600); assert.equal(await anims(), 0, 'static after arriving');
 });
 await step('job page shows a real match score and gaps', async () => {
-  await page.locator('.jcard', { hasText: 'Acme Payments' }).click();
+  await page.locator('.djob', { hasText: 'Acme Payments' }).locator('h3 a').click();
   await page.waitForSelector('h1:has-text("Senior Backend Engineer")');
   assert.match(page.url(), /#d-job-1$/);
   const body = await page.locator('main').innerText();
@@ -91,8 +91,8 @@ await step('paste a job: scored, tailored, new job on the board', async () => {
   await shot('pasted');
 });
 await step('moving a job to another stage works', async () => {
-  await page.locator('select[aria-label="Stage"]').selectOption('applied');
-  await page.getByText('Moved to Applied').waitFor();
+  await page.locator('.djob:has(option[value="applied"]) select').first().selectOption('applied');
+  await page.getByText(/moved to Applied/).waitFor();
 });
 await step('resume editor previews the tailored resume with embedded fonts', async () => {
   await page.goto(`${base}#d-resumes`); await page.reload();
@@ -114,9 +114,9 @@ await step('skill gaps, profile and settings render', async () => {
   }
 });
 await step('dark theme and phone width have no horizontal scroll', async () => {
-  await page.emulateMedia({ colorScheme: 'dark' }); await page.goto(`${base}#d-tracking`); await page.reload(); await page.waitForSelector('.jcard'); await shot('dark');
+  await page.emulateMedia({ colorScheme: 'dark' }); await page.goto(`${base}#d-tracking`); await page.reload(); await page.waitForSelector('.djob h3 a'); await shot('dark');
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.setViewportSize({ width: 390, height: 800 }); await page.reload(); await page.waitForSelector('.jcard');
+  await page.setViewportSize({ width: 390, height: 800 }); await page.reload(); await page.waitForSelector('.djob h3 a');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'page scrolls sideways at 390px');
   await shot('mobile');
 });

@@ -77,8 +77,8 @@ try {
   });
 
   await step('prep is saved: reopening shows it instantly without another run', async () => {
-    await page.goto(`${DASH}/#/tracking`); await page.waitForSelector('.board');
-    await page.click('.jcard'); await page.waitForSelector('.fit'); await page.click('.tabs >> text=Interview prep');
+    await page.goto(`${DASH}/#/tracking`); await page.waitForSelector('.djobs');
+    await page.click('.djob h3 a'); await page.waitForSelector('.fit'); await page.click('.tabs >> text=Interview prep');
     await page.waitForSelector('.oneliner', { timeout: 5000 });
   });
 
