@@ -11,8 +11,8 @@ import { resumesView, resumeEditorView, gapsView, settingsView } from './views-m
 
 const root = document.getElementById('app');
 let me = null;
-const TABS = [['#/tracking', 'Jobs'], ['#/resumes', 'Resumes'], ['#/gaps', 'Skills'], ['#/profile', 'Profile']];
-const TAB_OF = { tracking: '#/tracking', job: '#/tracking', resumes: '#/resumes', resume: '#/resumes', gaps: '#/gaps', profile: '#/profile' };
+const TABS = [['#/tracking', 'Jobs'], ['#/resumes', 'Resumes'], ['#/gaps', 'Skills'], ['#/profile', 'Profile'], ['#/settings', 'Settings']];
+const TAB_OF = { tracking: '#/tracking', job: '#/tracking', resumes: '#/resumes', resume: '#/resumes', gaps: '#/gaps', profile: '#/profile', settings: '#/settings' };
 
 // Setting the same hash again fires no hashchange, so re-render directly in that case.
 function go(hash) { if (location.hash === hash || (!location.hash && hash === '#/tracking')) route(); else location.hash = hash; }
@@ -41,7 +41,7 @@ function shell(page, main) {
       onclick: (e) => { const svg = e.currentTarget.querySelector('svg'); if (svg && logoPlaying(svg)) armLogo(); },
     }, brandLogo({ height: 32, label: BRAND.name })),
     h('nav', { class: 'navtabs', 'aria-label': 'Main' }, TABS.map(([href, label]) => h('a', { href, class: `navitem ${href === active ? 'active' : ''}` }, label))),
-    h('div', { class: 'nav-actions' }, 
+    h('div', { class: 'nav-actions' }, me.quota?.remaining != null && h('a', { class: 'credits', href: '#/settings' }, `${me.quota.remaining} credit${me.quota.remaining === 1 ? '' : 's'}`),
       h('button', { class: 'btn primary sm', onclick: () => requestAdd(go) }, icon('plus', 15), 'Add job'), wrap)));
   return h('div', { class: 'app' }, nav, main);
 }

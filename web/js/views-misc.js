@@ -38,10 +38,12 @@ export async function gapsView() {
   const host = h('div', null, pageHead('Skills', gaps.length ? 'What your saved jobs ask for that your resume doesn’t show.' : null));
   if (!gaps.length) { host.append(emptyState(icon('target', 22), totalJobs ? 'No gaps' : 'Nothing to compare yet', totalJobs ? 'Your resume covers what your saved jobs ask for.' : 'Add a few jobs to see which skills come up.', !totalJobs && h('a', { class: 'btn primary lg', href: '#/tracking' }, 'Go to jobs'))); return host; }
   const top = gaps[0];
-  host.append(nextStep({ title: `${top.skill} is your biggest gap`, sub: `Missing in ${top.jobs} of ${totalJobs} jobs. Learn it, or confirm it if you have it.`, actions: [] }),
-    h('div', { class: 'card' }, gaps.map((g) => h('div', { class: 'gap' },
-      h('span', { class: 'chip warn' }, g.skill),
-      h('div', { class: 'grow' }, h('div', { class: 'small muted' }, `${g.jobs} of ${totalJobs} jobs`, g.must ? ` · required in ${g.must}` : ' · nice to have'))))));
+  const list = (items) => h('ul', { class: 'gaplist' }, items.map((g) => h('li', null, h('b', null, g.skill), h('span', { class: g.must ? 'need' : '' }, `${g.jobs} of ${totalJobs} jobs`))));
+  const req = gaps.filter((g) => g.must), nice = gaps.filter((g) => !g.must);
+  host.append(nextStep({ label: 'Biggest gap', title: top.skill, sub: `Missing in ${top.jobs} of ${totalJobs} jobs. Learn it, or add it to your resume if you have it, then update the job.`, actions: [] }),
+    h('div', { class: 'gapgrid' },
+      req.length > 0 && h('section', { class: 'dmod' }, h('div', { class: 'dtab' }, `Required (${req.length})`), list(req)),
+      nice.length > 0 && h('section', { class: 'dmod' }, h('div', { class: 'dtab' }, `Nice to have (${nice.length})`), list(nice))));
   return host;
 }
 
@@ -56,7 +58,7 @@ export async function settingsView(me, go, open) {
   const del = h('input', { type: 'text', placeholder: 'Type your email to confirm', style: 'max-width:280px' });
 
   const account = () => h('div', { class: 'stack' },
-    h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('div', null, h('h2', null, 'Account'), h('p', null, 'Signed in as ', me.user.email))), h('div', { class: 'row' },
+    h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('div', null, h('h2', null, 'Signed in'), h('p', null, 'Signed in as ', me.user.email))), h('div', { class: 'row' },
       h('button', { class: 'btn', onclick: async () => { try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* already out */ } setToken(''); go('#/login'); } }, 'Sign out'),
       h('button', { class: 'btn', onclick: () => download('/api/export', 'tailorkit-export.json').catch((e) => toast(e.message, true)) }, 'Export my data'))),
     h('div', { class: 'card' }, h('h2', null, 'Delete account'), h('p', { class: 'muted small' }, 'Permanently deletes your resume, jobs and tailored versions.'),

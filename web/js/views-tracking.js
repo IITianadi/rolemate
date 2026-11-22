@@ -1,7 +1,7 @@
 import { h, toast, clear } from './dom.js';
 import { api } from './api.js';
 import { icon } from './icons.js';
-import { pageHead, emptyState, nextStep, logoMark, sourceName, ago, exact, parseTs } from './ui.js';
+import { pageHead, emptyState, nextStep, logoMark, ago, exact, parseTs } from './ui.js';
 
 export const STATUS_LABEL = { saved: 'Saved', applied: 'Applied', screening: 'Screening call', interview: 'Interview', offer: 'Offer', rejected: 'Rejected' };
 export const bandOf = (m) => m?.band || 'unknown';
@@ -71,9 +71,8 @@ function checklist(me, jobs, go) {
   const doneN = steps.filter((s) => s.done).length;
   const nowAt = steps.findIndex((s) => !s.done);
   if (nowAt === -1) {
-    if (store.get(userKey(me, 'setup'), '') === '1') return null;
-    store.set(userKey(me, 'setup'), '1'); // celebrate once, then the normal board takes over
-    return h('div', { class: 'reward-line' }, 'You’re set up: 5 of 5 done. From here, every job you capture gets its own tailored resume.');
+    store.set(userKey(me, 'setup'), '1'); // setup is done: the This week module takes the column
+    return null;
   }
   if (store.get(userKey(me, 'skip'), '') === '1') return null;
   return h('div', { class: 'card onboard', style: 'margin-bottom:26px' },
@@ -98,7 +97,7 @@ export async function trackingView(me, go) {
     if (list) {
       host.append(h('div', { style: 'max-width:820px;margin:0 auto' },
         h('h1', { style: 'font-size:clamp(2rem,4vw,2.6rem)' }, 'Welcome. Let’s get your first tailored resume.'),
-        h('p', { class: 'muted', style: 'font-size:1.1rem;margin:12px 0 22px;font-weight:300' }, 'A few quick steps. About 3 minutes.'),
+        h('p', { class: 'muted', style: 'margin:12px 0 22px;font-weight:500' }, 'A few quick steps. About 3 minutes.'),
         credits != null && h('div', { class: 'reward-line' }, 'You have ', h('b', null, `${credits} free credit${credits === 1 ? '' : 's'}`), '. One credit covers one job, from saving it to interview prep.'),
         addJobPanel(go), list));
     } else {
@@ -152,12 +151,13 @@ export async function trackingView(me, go) {
     return h('li', { class: `djob${off ? ' off' : ''}` },
       h('div', { class: 'drole' }, logoMark(j, 40), h('div', null,
         h('h3', null, h('a', { href: `#/job/${j.id}` }, j.title || 'Untitled role'), j.id === next.id && h('span', { class: 'dmark' }, 'Next')),
-        h('p', { title: `Saved ${exact(j.createdAt)}` }, [j.company || 'Company not detected', sourceName(j), when(j)].filter(Boolean).join(' · ')),
-        hint && h('p', { class: 'hint' }, hint), act && h('div', { class: 'dact' }, act))),
+        h('p', { title: `Saved ${exact(j.createdAt)}` }, [j.company || 'Company not detected', when(j)].join(' · ')),
+        hint && h('p', { class: 'hint' }, hint))),
       h('div', { class: `dfit ${band}` }, h('span', null, sc == null ? 'No score' : `${sc}% `, sc != null && h('small', null, 'fit')),
         sc != null && h('div', { class: 'dmeter', role: 'meter', 'aria-label': `Fit for ${label(j)}`, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': sc }, h('i', { style: `width:${sc}%` }))),
       h('div', { class: 'dstage' }, h('select', { 'aria-label': `Move ${label(j)} to a later stage`, disabled: opts.length < 2, onchange: (e) => { if (e.target.value !== j.status) move(j, e.target.value); } },
-        opts.map((k, i) => h('option', { value: k, selected: i === 0 }, i === 0 ? STATUS_LABEL[k] : `Move to ${STATUS_LABEL[k]}`)))));
+        opts.map((k, i) => h('option', { value: k, selected: i === 0 }, i === 0 ? STATUS_LABEL[k] : `Move to ${STATUS_LABEL[k]}`)))),
+      h('div', { class: 'dact' }, act));
   }
   function draw() {
     drawPipe(); clear(body);
@@ -169,6 +169,7 @@ export async function trackingView(me, go) {
   const list = checklist(me, jobs, go);
   const side = list || h('div', { class: 'dside dmod' }, h('div', { class: 'dtab' }, 'This week'),
     h('div', { class: 'dweek' }, h('span', { class: 'big' }, String(appliedWeek)), h('b', null, `application${appliedWeek === 1 ? '' : 's'} sent`), h('p', null, appliedWeek >= 4 ? 'A strong week. Keep the interviews first.' : 'One more good-fit job today keeps you moving.')),
+    h('div', { class: 'dweek' }, h('ul', { class: 'counts' }, statuses.map((k) => h('li', null, h('span', null, STATUS_LABEL[k]), h('b', null, n(k)))))),
     credits != null && h('div', { class: 'dweek' }, h('b', null, `${credits} credit${credits === 1 ? '' : 's'} left`), h('p', null, 'One credit covers one job: save, tailor, prep and chat. Credits never expire.'), h('a', { href: '#/settings' }, 'Buy more credits')));
   host.classList.add('dash');
   host.append(pageHead('Jobs', `${n('saved')} saved · ${n('applied')} applied · ${talking} interviewing.${appliedWeek ? ` You applied to ${appliedWeek} job${appliedWeek === 1 ? '' : 's'} this week. Nice work.` : ''}`), addJobPanel(go), next.node,
@@ -176,7 +177,7 @@ export async function trackingView(me, go) {
       h('section', { class: 'dmod', 'aria-label': 'Your jobs' }, h('div', { class: 'dtab' }, 'Jobs'), pipe,
         h('div', { class: 'dtools' }, h('div', { class: 'search' }, icon('search'), search), h('label', { class: 'sort' }, 'Sort ', sorter)),
         h('p', { class: 'dlegend' }, h('b', null, 'Fit'), ' is how many of a job’s required skills your resume covers. The line on each bar is ', h('b', null, '75%'), ', a good score to apply at.'),
-        h('div', { class: 'dhdr', 'aria-hidden': 'true' }, h('span', null, 'Role'), h('span', null, 'Fit'), h('span', null, 'Stage')), body),
+        h('div', { class: 'dhdr', 'aria-hidden': 'true' }, h('span', null, 'Role'), h('span', null, 'Fit'), h('span', null, 'Stage'), h('span', null, 'Action')), body),
       h('aside', { 'aria-label': 'Progress', class: 'dside' }, side)));
   draw();
   if (wantAdd) { wantAdd = false; queueMicrotask(toggleAdd); }

@@ -21,16 +21,15 @@ function el(tag, props = {}, ...kids) {
 }
 const svg = (markup) => { const t = document.createElement('template'); t.innerHTML = markup.trim(); return t.content.firstChild; };
 
-// The Rolemate mark: two squares that come together, then the check is drawn. `loop` keeps it playing while we work.
-const MARK = (loop) => svg(`<svg class="mark ${loop ? 'loop' : ''}" viewBox="0 0 72 72" aria-hidden="true">
-  <g transform="translate(4 4)"><rect class="sq1" x="6" y="6" width="36" height="36" rx="11" fill="#1D1D1F"/><rect class="sq2" x="22" y="22" width="36" height="36" rx="11" fill="#2F6BFF"/>
-  <clipPath id="mk-c"><rect x="6" y="6" width="36" height="36" rx="11"/></clipPath><g clip-path="url(#mk-c)"><rect class="ov" x="22" y="22" width="36" height="36" rx="11" fill="#fff"/></g>
-  <path class="ck" pathLength="1" d="M27 33.5L31.6 38L38.4 29.5" fill="none" stroke="#2F6BFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`);
+// The Rolemate mark (two-module R): a tall ink block, a red block, an open outlined box. `loop` replays the assembly while we work.
+const markInner = '<rect class="m-ink" x="0" y="4" width="22" height="48" fill="#111"/><rect class="m-red" x="26" y="4" width="22" height="22" fill="#D0021B"/><rect class="m-box" pathLength="1" x="27.5" y="31.5" width="19" height="19" fill="none" stroke="#111" stroke-width="3"/>';
+const MARK = (loop) => svg(`<svg class="mark ${loop ? 'loop' : ''}" viewBox="0 0 48 56" aria-hidden="true">${markInner}</svg>`);
+const LOGO = () => svg(`<svg class="logo" viewBox="0 0 230 56" role="img" aria-label="Rolemate">${markInner}<text x="62" y="40" textLength="164" lengthAdjust="spacingAndGlyphs" font-family="'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="32" fill="#111">Rolemate</text></svg>`);
 
 let credits = null; // from /api/me, shown in the footer
 function show(...nodes) {
   root.replaceChildren(
-    el('header', {}, el('div', { class: 'brand' }, MARK(false), el('span', {}, 'role', el('b', {}, 'mate')))),
+    el('header', {}, LOGO()),
     el('main', {}, ...nodes));
 }
 const footer = async () => {
@@ -42,7 +41,7 @@ const footer = async () => {
 };
 // A titled message: icon state, a one-line title, and what to do next.
 const message = (kind, title, text, ...actions) => el('section', { class: `msg ${kind}` },
-  el('div', { class: 'dot' }, kind === 'ok' ? '✓' : kind === 'stop' ? '!' : 'i'),
+  el('div', { class: 'tab' }, kind === 'stop' ? 'Needs attention' : 'Next step'),
   el('h1', {}, title), text && el('p', {}, text), ...actions);
 
 async function callApi(path, { method = 'GET', body } = {}) {
@@ -226,8 +225,8 @@ async function home() {
       el('button', { class: 'btn', onclick: () => openTab('/#/tracking/add') }, 'Paste the job in Rolemate instead')), sitesList(), f);
   }
   const title = String(tab.title || '').replace(/\s*[|–-]\s*(LinkedIn|Naukri\.com|Indeed\.com|Glassdoor|foundit).*$/i, '').trim();
-  show(el('section', { class: 'ready' },
-    el('span', { class: 'tag' }, el('i'), site.isJobUrl ? `${site.name} job` : site.name),
+  show(el('section', { class: 'ready mod' },
+    el('span', { class: 'tab' }, site.isJobUrl ? `${site.name} job` : site.name),
     el('h1', {}, site.isJobUrl ? 'Ready to capture' : 'Open the job you want'),
     site.isJobUrl && title && el('p', { class: 'jobline' }, title),
     el('p', {}, site.isJobUrl ? 'Rolemate saves this job, scores how well you match, and tailors your resume to it.' : `Click a job on ${site.name} so its full description is open, then capture it.`),
@@ -283,41 +282,41 @@ async function capture(tab, site) {
   }
 }
 
-function ring(score, color) {
-  const n = el('b', {}, '0');
-  const r = el('div', { class: 'ring', style: `--c:${color};--p:0` }, n);
+function fitMeter(score) {
+  const num = document.createTextNode('0');
+  const n = el('b', {}, num, el('small', {}, '/100'));
+  const m = el('div', { class: 'meter', style: '--p:0' }, el('i'));
   const t0 = performance.now();
-  const tick = (t) => { const k = Math.min(1, (t - t0) / 900); const v = Math.round(score * (1 - Math.pow(1 - k, 3))); n.textContent = v; r.style.setProperty('--p', v); if (k < 1) requestAnimationFrame(tick); };
+  const tick = (t) => { const k = Math.min(1, (t - t0) / 700); const v = Math.round(score * (1 - Math.pow(1 - k, 3))); num.data = v; m.style.setProperty('--p', v); if (k < 1) requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
-  return r;
+  return { n, m };
 }
 
 async function result({ job, resumeId, quotaExceeded, quota, existing }) {
   if (quota && quota.remaining != null) credits = quota.remaining;
   const m = job.match || {};
-  const color = m.band === 'strong' ? '#1fb57a' : m.band === 'partial' ? '#2f6bff' : '#f5a623';
   const missing = m.missingMust || []; const have = (m.matchedMust || []).length; const req = have + missing.length;
   const fit = m.fit || [];
   const gapNames = fit.length ? fit.filter((i) => i.status !== 'have' && i.kind !== 'responsibility').sort((a, b) => (a.kind === 'must' ? 0 : 1) - (b.kind === 'must' ? 0 : 1)).map((i) => i.requirement) : missing;
   const openJob = () => openTab(`/#/job/${job.id}`);
   const dl = el('button', { class: 'btn primary', onclick: async () => {
     dl.disabled = true; dl.textContent = 'Preparing your PDF…';
-    try { await downloadPdf(resumeId); dl.textContent = 'Downloaded ✓'; next.hidden = false; }
+    try { await downloadPdf(resumeId); dl.textContent = 'Downloaded'; next.hidden = false; }
     catch (x) { dl.disabled = false; dl.textContent = 'Download tailored resume'; next.textContent = x.message; next.hidden = false; }
   } }, 'Download tailored resume');
   const next = el('p', { class: 'hint', hidden: true }, 'Next: apply on the job site, then mark it as applied in your dashboard.');
   show(
-    el('div', { class: 'okline' }, el('i', {}, '✓'), existing ? 'Updated in your dashboard' : 'Saved to your dashboard'),
+    el('section', { class: 'mod' }, el('span', { class: 'tab' }, existing ? 'Updated in your dashboard' : 'Saved to your dashboard'),
     el('div', { class: 'job' }, el('div', { class: 'title' }, job.title || 'Untitled role'), el('div', { class: 'muted' }, [job.company, job.location].filter(Boolean).join(' · ') || 'Company not detected')),
     m.score != null
-      ? el('div', { class: 'score' }, ring(m.score, color), el('div', {},
-        el('strong', {}, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match' }[m.band] || 'Match'),
-        el('div', { class: 'muted' }, req ? `Covers ${have} of ${req} required skills` : 'Scored on experience and role')))
+      ? (() => { const f = fitMeter(m.score); return el('div', { class: `score ${m.band === 'weak' ? 'weak' : ''}` },
+        el('div', { class: 'fit' }, f.n, el('strong', {}, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match' }[m.band] || 'Match')), f.m,
+        el('div', { class: 'muted' }, req ? `Covers ${have} of ${req} required skills. 75 is a good target to apply.` : 'Scored on experience and role. 75 is a good target to apply.')); })()
       : el('p', { class: 'muted' }, 'No clear requirements found on this page, so there’s no score.'),
     // Missing items are only shown. Nothing is added for you: add them to your resume if you have them.
     gapNames.length > 0 && el('div', { class: 'gaps' }, el('div', { class: 'label' }, 'Not on your resume'),
       el('div', { class: 'chips' }, gapNames.slice(0, 5).map((s) => el('span', { class: 'chip' }, s)), gapNames.length > 5 && el('span', { class: 'chip more' }, `+${gapNames.length - 5}`)),
-      el('p', { class: 'hint' }, 'Have any of these? Add them to your resume in the dashboard.')),
+      el('p', { class: 'hint' }, 'Have any of these? Add them to your resume in the dashboard.'))),
     quotaExceeded
       ? message('stop', 'You’re out of credits', 'The job is saved and scored, but no resume was made. Buy credits to tailor it.',
         el('button', { class: 'btn primary', onclick: () => openTab('/#/settings/billing') }, 'Buy credits'))
@@ -368,7 +367,7 @@ async function signIn(msg, fromAccount) {
   show(
     signedIn && el('div', { class: 'acct' }, el('span', {}, 'Signed in as ', el('b', {}, s.email)),
       el('button', { class: 'link', onclick: async () => { await store.set({ token: '', email: '' }); credits = null; signIn(); } }, 'Sign out')),
-    el('section', { class: 'signin' }, el('h1', {}, signedIn ? 'Switch account' : 'Sign in to Rolemate'),
+    el('section', { class: 'signin mod' }, el('span', { class: 'tab' }, signedIn ? 'Account' : 'Sign in'), el('h1', {}, signedIn ? 'Switch account' : 'Sign in to Rolemate'),
       el('p', { class: 'muted' }, 'Use the same account as your Rolemate dashboard.'), form,
       el('details', { class: 'alt' }, el('summary', {}, 'Signed up with Google?'), codeForm),
       el('p', { class: 'muted center' }, 'New to Rolemate? ', el('button', { class: 'link inline', onclick: () => openTab('/') }, 'Create a free account'))),

@@ -86,7 +86,7 @@ export async function profileView(me, go) {
   const field = (key, label, ph, type = 'text') => h('label', { class: 'field' }, label, (fields[key] = h('input', { type, value: f[key] ?? '', placeholder: ph || '' })));
   const confirmed = [...profile.confirmedSkills];
   const chips = h('div', { class: 'reqs' });
-  const drawChips = () => { clear(chips); confirmed.length ? confirmed.forEach((s) => chips.append(h('span', { class: 'chip good' }, s, h('button', { class: 'btn sm ghost', style: 'padding:0 4px', 'aria-label': `Remove ${s}`, onclick: () => { confirmed.splice(confirmed.indexOf(s), 1); drawChips(); } }, '✕')))) : chips.append(h('span', { class: 'muted small' }, 'None yet. When a job asks for a skill you have but your resume lacks, tap “I have this” on the job page.')); };
+  const drawChips = () => { clear(chips); confirmed.length ? confirmed.forEach((s) => chips.append(h('span', { class: 'chip good' }, s, h('button', { class: 'btn sm ghost', style: 'padding:0 4px', 'aria-label': `Remove ${s}`, onclick: () => { confirmed.splice(confirmed.indexOf(s), 1); drawChips(); } }, icon('trash', 14))))) : chips.append(h('span', { class: 'muted small' }, 'None yet. When a job asks for a skill you have but your resume lacks, add it to your resume, then update the job.')); };
   drawChips();
   const save = async () => {
     const facts = {}; for (const [k, el] of Object.entries(fields)) facts[k] = el.value.trim();

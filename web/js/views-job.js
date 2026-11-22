@@ -55,7 +55,7 @@ export async function jobView(id, me, go) {
     // One number. Everything under it is a plain reason for that number, not another metric.
     const verdict = { strong: 'Good fit. Worth applying.', partial: 'Close. Cover the gaps below if you can.', weak: 'Big gaps for this role. Apply only if you can cover them.' }[band];
     const left = h('div', null,
-      h('div', { class: 'fit' }, m.score != null && ring(m.score),
+      h('div', { class: 'fit' }, m.score != null && h('div', { class: 'bigfit' }, h('span', { class: 'num' }, `${m.score}%`), h('div', { class: 'dmeter', role: 'meter', 'aria-label': 'Fit', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': m.score }, h('i', { style: `width:${m.score}%` }))),
         h('div', { class: 'words' }, h('h2', null, { strong: 'Strong match', partial: 'Partial match', weak: 'Weak match', unknown: 'No requirements found' }[band]),
           h('p', null, m.score == null ? 'Paste the full description to score it.' : verdict),
           up && h('span', { class: 'delta' }, `↑ from ${m.firstScore}% when you saved it`))),
@@ -67,14 +67,14 @@ export async function jobView(id, me, go) {
     const right = h('div', { class: 'right' }, r
       ? [h('div', { class: 'resumeprev' }, paper, h('div', null,
           h('span', { class: 'chip good', style: 'margin-bottom:10px' }, r.downloaded ? 'Downloaded' : 'Tailored resume ready'),
-          h('h2', { style: 'font-size:1.35rem;margin:0' }, n ? `${n} change${n === 1 ? '' : 's'} for this job` : 'Ready for this job'),
+          h('h2', { style: 'font-size:1.05rem;margin:0' }, n ? `${n} change${n === 1 ? '' : 's'} for this job` : 'Ready for this job'),
           h('div', { class: 'muted small', style: 'margin-top:2px' }, 'Same layout. Nothing added that isn’t yours.'),
           h('div', { class: 'row', style: 'margin-top:16px;gap:10px' }, h('button', { class: 'btn primary', onclick: () => dl(r) }, 'Download PDF'), h('a', { class: 'btn', href: `#/resume/${r.id}` }, 'Edit'),
             h('button', { class: 'btn ghost sm', onclick: tailor, title: 'Tailor again from your current resume' }, icon('refresh', 15), 'Redo')))),
         n > 0 && h('details', { class: 'changes' }, h('summary', null, 'See what we changed'),
           h('ul', null, r.changes.map((c) => h('li', null, c)), h('li', { class: 'keep' }, '✓ Layout, fonts and sections unchanged'))),
         job.resumes.length > 1 && h('div', { class: 'small muted', style: 'margin-top:12px' }, 'Earlier: ', job.resumes.slice(1).map((x) => h('a', { href: `#/resume/${x.id}`, style: 'margin-right:10px' }, fmtDate(x.created_at) || `#${x.id}`)))]
-      : h('div', { class: 'resumeprev' }, paper, h('div', null, h('h2', { style: 'font-size:1.35rem;margin:0' }, 'Your resume for this job'),
+      : h('div', { class: 'resumeprev' }, paper, h('div', null, h('h2', { style: 'font-size:1.05rem;margin:0' }, 'Your resume for this job'),
           h('div', { class: 'muted small', style: 'margin:2px 0 16px' }, 'Same layout, reordered for this job.'), h('button', { class: 'btn primary', onclick: tailor }, 'Create resume'))));
     return h('div', { class: 'card hero' }, left, right);
   }

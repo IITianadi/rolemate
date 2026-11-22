@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-22T00:00:00Z",
+  "title": "Design System: Rolemate",
+  "extensions": {
+    "colorMeta": {
+      "utility-red": { "role": "primary", "displayName": "Utility Red", "canonical": "#d0021b", "tonalRamp": ["#3d0008", "#66000f", "#8f0013", "#b30018", "#d0021b", "#e8505f", "#f4979f", "#fbd9dd"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#111111", "tonalRamp": ["#000000", "#111111", "#2b2f33", "#555b61", "#8a9096", "#c9ced3", "#e9ecef", "#f4f5f7"] },
+      "hairline": { "role": "neutral", "displayName": "Hairline Grey", "canonical": "#e9ecef", "tonalRamp": ["#555b61", "#8a9096", "#aab0b6", "#c9ced3", "#dadee2", "#e9ecef", "#f4f5f7", "#ffffff"] },
+      "match-green": { "role": "status", "displayName": "Match Green", "canonical": "#0f8a5a", "tonalRamp": ["#04271a", "#074d33", "#0a6e47", "#0f8a5a", "#1fb57a", "#7fd3ae", "#c0ead8", "#e3f6ee"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page title and key figures in Noto Sans JP Black." },
+      "headline": { "displayName": "Headline", "purpose": "The one sentence in the Next module." },
+      "title": { "displayName": "Title", "purpose": "Job role names and headings." },
+      "body": { "displayName": "Body", "purpose": "Running text, 15.5px, tabular numerals." },
+      "label": { "displayName": "Label", "purpose": "Module tabs and table headers in Black weight." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(.22, 1, .36, 1)", "purpose": "Bars filling, rows rising in, logo assembling." },
+      { "name": "reduced-motion", "value": "animation-duration and transition-duration .01ms", "purpose": "Instant swaps when the user prefers reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "720px" },
+      { "name": "stack", "value": "980px" },
+      { "name": "wide-edit", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one black action per module, such as the Next module button.",
+      "html": "<button class=\"ds-btn-primary\">Mark applied</button>",
+      "css": ".ds-btn-primary { background: #111111; color: #fff; border: 1px solid #111111; min-height: 44px; padding: 0 18px; font: 700 15px 'Noto Sans JP', Inter, sans-serif; border-radius: 0; cursor: pointer; } .ds-btn-primary:hover { background: #000; outline: 2px solid #d0021b; } .ds-btn-primary:focus-visible { outline: 3px solid #111111; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outline action that inverts on hover.",
+      "html": "<button class=\"ds-btn-secondary\">Tailor resume</button>",
+      "css": ".ds-btn-secondary { background: #fff; color: #111111; border: 1px solid #111111; min-height: 44px; padding: 0 18px; font: 700 15px 'Noto Sans JP', Inter, sans-serif; border-radius: 0; cursor: pointer; } .ds-btn-secondary:hover { background: #111111; color: #fff; } .ds-btn-secondary:focus-visible { outline: 3px solid #111111; outline-offset: 2px; }"
+    },
+    {
+      "name": "Module with Red Tab",
+      "kind": "card",
+      "refersTo": "module",
+      "description": "The one building block: hairline box with a red tab hanging from its top-left corner.",
+      "html": "<section class=\"ds-mod\"><span class=\"ds-tab\">This week</span><p class=\"ds-big\">4</p><p>applications sent</p></section>",
+      "css": ".ds-mod { border: 1px solid #e9ecef; background: #fff; padding: 0 20px 18px; width: 280px; font-family: 'Noto Sans JP', Inter, sans-serif; color: #111111; } .ds-tab { display: inline-block; background: #d0021b; color: #fff; font-weight: 900; font-size: 15px; padding: 5px 14px; margin: -1px 0 14px -21px; } .ds-big { font-size: 2.6rem; line-height: 1; font-weight: 900; color: #d0021b; margin: 0 0 4px; } .ds-mod p { margin: 0; }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Square white field with ink focus ring.",
+      "html": "<input class=\"ds-input\" type=\"search\" placeholder=\"Search jobs\">",
+      "css": ".ds-input { background: #fff; border: 1px solid #c9ced3; border-radius: 0; padding: 10px 12px; min-height: 44px; font: 500 15px 'Noto Sans JP', Inter, sans-serif; color: #111111; width: 260px; } .ds-input::placeholder { color: #8a9096; } .ds-input:focus { outline: none; border-color: #111111; box-shadow: 0 0 0 2px #111111; }"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "module-tab",
+      "description": "Top bar item; the active one carries a 4px red underline.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-navitem on\" href=\"#\">Jobs</a><a class=\"ds-navitem\" href=\"#\">Resume</a><a class=\"ds-navitem\" href=\"#\">Settings</a></nav>",
+      "css": ".ds-nav { display: flex; border-bottom: 2px solid #111111; font-family: 'Noto Sans JP', Inter, sans-serif; } .ds-navitem { display: flex; align-items: center; min-height: 60px; padding: 0 16px; font-weight: 700; font-size: 15px; color: #2b2f33; text-decoration: none; border-bottom: 4px solid transparent; margin-bottom: -2px; } .ds-navitem:hover { background: #f4f5f7; color: #111111; } .ds-navitem.on { color: #111111; border-bottom-color: #d0021b; }"
+    },
+    {
+      "name": "Fit Pills",
+      "kind": "chip",
+      "refersTo": "chip-match",
+      "description": "Square status pills: strong, partial, weak.",
+      "html": "<span class=\"ds-pill ds-strong\">Strong</span> <span class=\"ds-pill ds-partial\">Partial</span> <span class=\"ds-pill ds-weak\">Weak</span>",
+      "css": ".ds-pill { display: inline-block; font: 700 13px 'Noto Sans JP', Inter, sans-serif; padding: 3px 11px; border-radius: 0; } .ds-strong { background: #e3f6ee; color: #0f8a5a; } .ds-partial { background: #fff6dd; color: #7a5200; } .ds-weak { background: #fde8ea; color: #8a0013; }"
+    },
+    {
+      "name": "Job Row Fit Meter",
+      "kind": "custom",
+      "refersTo": "job-row",
+      "description": "Fit percentage in Black weight over a flat 8px meter with the red 75% tick.",
+      "html": "<div class=\"ds-fit\"><span>82%</span><div class=\"ds-meter\"><i style=\"width:82%\"></i></div></div>",
+      "css": ".ds-fit { width: 130px; font-family: 'Noto Sans JP', Inter, sans-serif; color: #111111; } .ds-fit span { font-weight: 900; font-size: 1.15rem; } .ds-meter { position: relative; height: 8px; background: #e9ecef; margin-top: 6px; } .ds-meter i { position: absolute; left: 0; top: 0; bottom: 0; background: #111111; } .ds-meter::after { content: ''; position: absolute; left: 75%; top: -3px; bottom: -3px; width: 3px; background: #d0021b; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Ruled Ledger",
+    "overview": "Rolemate's dashboard is a working tool for freshers applying to many jobs, so it reads like a dense, well-ruled ledger: a white ground, near-black ink, cool grey hairlines around every module, and one utility red that marks tabs, ticks and anything that needs attention. The world is a Japanese high-density web catalog form. Twenty jobs should fit on a screen, and each row says what is missing rather than flattering the user.\n\nDepth does not exist here. Structure comes from 1px hairlines, 2px black rules under tab strips, and square corners. Selection is a red underline or a red tab, never a glow or a fill. The mood is cold and exact by nature; warmth has to come from copy and spacing, which the brief left open.",
+    "keyCharacteristics": [
+      "Every part of a job is a ruled module with a red header tab.",
+      "Square corners everywhere (0px), 1px hairlines, no shadows, no gradients in the shipped Jobs layer.",
+      "Red is rare and meaningful: tabs, the 75% tick, needs-attention figures, the active nav underline.",
+      "Noto Sans JP at Black (900) for tab labels and display numbers, Medium to Regular for body.",
+      "The logo is the two-module R: a tall ink block, a red block, an open outlined block, plus the wordmark in Noto Sans JP Black."
+    ],
+    "rules": [
+      { "name": "The One Red Rule", "body": "Red marks a tab, a tick or a thing that needs action. It is never a background wash, a hover glow or decoration.", "section": "colors" },
+      { "name": "The Hairline Rule", "body": "Every module is bordered by a 1px #e9ecef line. Separation is a rule, never a shadow or a tint panel.", "section": "colors" },
+      { "name": "The Black Numbers Rule", "body": "Figures that matter (fit percentage, stage counts, week count) are Black weight; supporting words are Medium or lighter.", "section": "typography" },
+      { "name": "The Flat Rule", "body": "No shadow at rest or on hover. Hover is a fill change (to Sunken, or to Ink for outline buttons) or a colour change to red on links.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build every new surface from the red-tabbed hairline module.",
+      "Do use #d0021b only for tabs, active underlines, the 75% tick and needs-attention figures.",
+      "Do keep corners at 0px and borders at 1px hairline (#e9ecef) with 2px ink rules under strips.",
+      "Do set important numbers in Noto Sans JP Black and keep body at or above 15.5px.",
+      "Do keep hover as a fill or colour swap, and keep the 44px touch height on controls.",
+      "Do honour `prefers-reduced-motion`; motion is functional (logo assembly once, bars filling, rows entering)."
+    ],
+    "donts": [
+      "Don't add shadows, blur, glow or gradients to modules, menus or buttons.",
+      "Don't round corners or use pill or circular shapes for new elements.",
+      "Don't fill a selected item with colour; use the red underline or red tab.",
+      "Don't introduce a second accent colour; green and amber tints mean match and missing only.",
+      "Don't use emoji or decorative pulses."
+    ]
+  }
+}
