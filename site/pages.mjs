@@ -25,90 +25,78 @@ const faqItems = (c) => [
 export const PAGES = [
   {
     slug: 'index', nav: false, title: (B) => `${B.name}: tailor your resume to every job`, desc: 'A Chrome extension and dashboard that tailors your resume to each job in your own layout, shows missing skills and prepares you for the interview.',
-    schema: (c) => [{ '@type': 'SoftwareApplication', name: c.B.name, applicationCategory: 'BusinessApplication', operatingSystem: 'Chrome', description: c.B.description, offers: [{ '@type': 'Offer', price: '0', priceCurrency: 'INR', name: 'Free' }, { '@type': 'Offer', price: '299', priceCurrency: 'INR', name: 'Pro (monthly)' }] }],
+    schema: (c) => [{ '@type': 'SoftwareApplication', name: c.B.name, applicationCategory: 'BusinessApplication', operatingSystem: 'Chrome', description: c.B.description, offers: [{ '@type': 'Offer', price: '0', priceCurrency: 'INR', name: '50 free credits' }, { '@type': 'Offer', price: '199', priceCurrency: 'INR', name: '30 credits' }, { '@type': 'Offer', price: '499', priceCurrency: 'INR', name: '100 credits' }, { '@type': 'Offer', price: '1299', priceCurrency: 'INR', name: '300 credits' }] }],
     body: (c) => `
 <div class="wrap hero">
   <div class="copy">
-    <span class="eyebrow">For job seekers in India</span>
-    <h1>Apply with a resume that <em>fits</em> every&nbsp;job.</h1>
-    <p class="lead">Open any job. ${c.B.name} measures it against your resume, then cuts a tailored copy in <span class="chalk">your own layout</span>, with an interview brief for that company. You stay in control and press apply yourself.</p>
-    <div class="row"><a class="btn primary" href="#waitlist">Join the waitlist</a>${c.demo ? `<a class="btn" href="${c.demo}" target="_blank" rel="noopener">Try the live demo →</a>` : `<a class="btn" href="${c.u('how-it-works')}">See how it works</a>`}</div>
-    <p class="fine">50 free credits to start. No card needed.</p>
+    <h1>Apply with a resume that fits every&nbsp;job.</h1>
+    <p class="lead">Open a job. ${c.B.name} measures it against your resume, shows what is missing, and cuts a tailored copy in your own layout, with an interview brief for that company. You stay in control and press apply yourself.</p>
+    <div class="row"><a class="btn primary lg" href="#waitlist">Join the waitlist</a>${c.demo ? `<a class="btn lg" href="${c.demo}" target="_blank" rel="noopener">Try the live demo</a>` : `<a class="btn lg" href="${c.u('how-it-works')}">See how it works</a>`}</div>
+    <p class="fine-line"><b>50 free credits</b> to start. No card needed.</p>
   </div>
-  <div class="artwrap"><div class="art" role="img" aria-label="A resume and a job description pinned together. A tape measure shows an 86 out of 100 fit, and one missing skill is circled in red.">
-    <i class="crop-a"></i><i class="crop-b"></i>
-    <div class="paper" aria-hidden="true">
-      <div class="nm">RAHUL SHARMA</div><div class="ct">Bengaluru · rahul.sharma@example.com</div>
-      <div class="hd">EXPERIENCE</div>
-      <div class="jb">Software Engineer, PayNest <span>2022 – Present</span></div>
-      <div class="b">Built payment reconciliation services in Python and Django handling <mark>2 million transactions a day</mark></div>
-      <div class="b">Reduced API latency by <mark>38%</mark> with Redis caching and query tuning</div>
-      <div class="b">Containerised services with <span class="ring">Docker</span> and set up Jenkins pipelines</div>
-      <div class="sk m"></div><div class="sk s"></div>
-      <div class="hd">SKILLS</div>
-      <div class="sk m"></div><div class="sk"></div>
+  <div class="mod proof" role="group" aria-label="A sample job: 79 percent fit, one missing skill, and six pipeline stages.">
+    <span class="tab">Fit</span>
+    <div class="role"><b>Senior Backend Engineer</b><span>Acme Payments · Sample job</span></div>
+    <span class="fitnum">79<small>%</small></span>
+    <div class="meter" aria-hidden="true"><i style="width:79%"></i></div>
+    <div class="meter-key"><span>0</span><span><b>75%</b> is a good score to apply at</span><span>100</span></div>
+    <p class="missing"><b>Missing:</b> Kubernetes</p>
+    <div class="pipe" aria-label="Pipeline stages">
+      <div>Saved<b>2</b></div><div>Applied<b>1</b></div><div>Screening call<b>1</b></div><div>Interview<b>1</b></div><div class="dim">Offer<b>0</b></div><div>Rejected<b>1</b></div>
     </div>
-    <div class="jd" aria-hidden="true">
-      <div class="lbl">Job · Acme Payments</div><div class="tt">Senior Backend Engineer</div>
-      <div class="req"><i>✓</i>Python, Django</div><div class="req"><i>✓</i>PostgreSQL, Redis</div><div class="req"><i>✓</i>REST API design</div><div class="req miss"><i>×</i>Kubernetes <em>missing</em></div>
-    </div>
-    <svg class="thread" viewBox="0 0 400 370" aria-hidden="true"><path d="M283 134 C 238 150, 262 186, 204 196 S 120 232, 138 250"/><path class="needle" d="M131 257 L151 241 M148 243 a2 2 0 1 1 3 -3"/></svg>
-    <div class="tailored stamp" aria-hidden="true">Tailored ✓</div>
-    <div class="tapeart" aria-hidden="true"><div class="t"></div><div class="n"><span style="left:0">0</span><span style="left:25%">25</span><span style="left:50%">50</span><span style="left:75%">75</span><span style="left:100%">100</span></div><div class="pin"><b>FIT 86</b></div></div>
-  </div></div>
+    <p class="sample">Sample data from the live dashboard demo.</p>
+  </div>
 </div>
-<div class="ruler" aria-hidden="true"></div>
-<section class="block"><div class="wrap">
-  <span class="eyebrow">The problem</span>
-  <p class="statement reveal" style="margin-top:22px">A job description is a measurement. A resume is a garment. <strong>Most people send the same one, off the peg, to every job.</strong></p>
-  <div class="figs">
-    <div class="fig reveal"><span class="label">Fig. 1</span><h3>You can't see the gap</h3><p>Is Kubernetes a must-have or a nice-to-have? Do you mention it at all? Reading ten descriptions closely takes an evening.</p></div>
-    <div class="fig reveal"><span class="label">Fig. 2</span><h3>Templates rebuild your look</h3><p>Generic resume builders swap your layout for theirs. Then you re-do the formatting you already trust.</p></div>
-    <div class="fig reveal"><span class="label">Fig. 3</span><h3>Applications go quiet</h3><p>A spreadsheet of links will not tell you what you sent where, or what to prepare before the call.</p></div>
-  </div>
-</div></section>
-<section class="block paper"><div class="wrap">
-  <div class="sechead"><span class="eyebrow">The method</span><h2>Measure. Cut. Stitch. <em>Fit-check.</em></h2><p>The way a good tailor works, applied to a job application. Each step is something you can see and change.</p></div>
-  <div class="steps4">
-    <div class="tapeline" aria-hidden="true"></div>
-    <div class="step reveal"><span class="no">1</span><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="17" width="38" height="14" rx="2" transform="rotate(-18 24 24)"/><path d="M12 25l0 -4M17 23.5l0 -3M22 22l0 -4M27 20.5l0 -3M32 19l0 -4M37 17.5l0 -3" transform="rotate(0)"/></svg><h3>Measure</h3><p>Capture any job page or LinkedIn hiring post. We read what it asks for and split must-haves from nice-to-haves.</p></div>
-    <div class="step reveal"><span class="no">2</span><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="13" cy="35" r="5"/><circle cx="13" cy="13" r="5"/><path d="M17 16L42 36M17 32L42 12"/></svg><h3>Cut</h3><p>Your resume is read once, layout and all. Relevant bullets come forward and your numbers are highlighted. Nothing is invented.</p></div>
-    <div class="step reveal"><span class="no">3</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 38L38 10"/><circle cx="36" cy="12" r="2"/><path d="M10 38c-6 1-8 4-7 7 3 1 6-1 7-7z"/></svg><h3>Stitch</h3><p>Confirm a skill you really have and it is stitched into your profile and every future resume. Edit anything in the live preview.</p></div>
-    <div class="step reveal"><span class="no">4</span><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="17"/><path d="M15 25l6 6 12-13"/></svg><h3>Fit-check</h3><p>Download a clean PDF, then walk in prepared: likely questions with answers drafted from your own resume.</p></div>
+<section class="block top"><div class="wrap">
+  <p class="statement">A job description is a checklist. <span>Most people send the same resume to every one of them.</span></p>
+  <div class="grid3" style="margin-top:36px">
+    <div class="mod"><span class="tab">Gap</span><h3>You can't see the gap</h3><p>Is Kubernetes a must-have or a nice-to-have? Do you mention it at all? Reading ten descriptions closely takes an evening.</p></div>
+    <div class="mod"><span class="tab">Layout</span><h3>Templates rebuild your look</h3><p>Generic resume builders swap your layout for theirs. Then you re-do the formatting you already trust.</p></div>
+    <div class="mod"><span class="tab">Tracking</span><h3>Applications go quiet</h3><p>A spreadsheet of links will not tell you what you sent where, or what to prepare before the call.</p></div>
   </div>
 </div></section>
 <section class="block"><div class="wrap">
-  <div class="sechead"><span class="eyebrow">The real thing</span><h2>Every job on one <em>rail</em>, every score explained</h2><p>A job board with a fit score you can read, the exact gaps, and the tailored resume attached to each role.</p></div>
+  <div class="sechead"><h2>From job post to ready in four steps</h2><p>Each step is something you can see and change.</p></div>
+  <div class="grid4">
+    <div class="mod step"><span class="tab">Capture</span><span class="no">1</span><p>Capture a job page or a LinkedIn hiring post. We read what it asks for and split must-haves from nice-to-haves.</p></div>
+    <div class="mod step"><span class="tab">Tailor</span><span class="no">2</span><p>Your resume is read once, layout and all. Relevant bullets come forward and your numbers are highlighted. Nothing is invented.</p></div>
+    <div class="mod step"><span class="tab">Confirm</span><span class="no">3</span><p>Confirm a skill you really have and it is added to your profile and every future resume. Edit anything in the live preview.</p></div>
+    <div class="mod step"><span class="tab">Prepare</span><span class="no">4</span><p>Download a clean PDF, then walk in prepared: likely questions with answers drafted from your own resume.</p></div>
+  </div>
+</div></section>
+<section class="block"><div class="wrap">
+  <div class="sechead"><h2>Every job in one place, every score explained</h2><p>A tracker with a fit score you can read, the exact gaps, and the tailored resume attached to each role.</p></div>
   <div class="shots">
-    <figure class="frame reveal" style="margin:0"><div class="bar"><i></i><i></i><i></i></div><img src="${c.asset('shot-job.jpg')}" width="1280" height="860" alt="The job page: a 79 percent fit shown on a tape measure, with the score broken down by must-have skills, nice-to-haves, experience and role similarity."></figure>
-    <figure class="frame reveal" style="margin:0"><div class="bar"><i></i><i></i><i></i></div><img src="${c.asset('shot-board.jpg')}" width="1280" height="860" alt="The tracking board with jobs grouped by stage, each shown as a tag with its fit score."></figure>
+    <figure class="frame"><img src="${c.asset('shot-job.jpg')}" width="1280" height="820" alt="The job page: a 79 percent fit in red with a bar and a 75 percent tick, the reasons behind the score, and a tailored resume ready to download."><figcaption>One job: fit, what is missing, tailored resume</figcaption></figure>
+    <figure class="frame"><img src="${c.asset('shot-board.jpg')}" width="1280" height="820" alt="The Jobs screen: the next action, applications this week, stage counts and a table of jobs with fit bars and what is missing."><figcaption>All jobs: next action, stages, fit at a glance</figcaption></figure>
   </div>
-  <p class="cap">Screens from the live demo with sample data</p>
+  <p class="cap">Screens from the live demo with sample data.</p>
 </div></section>
-<section class="block paper"><div class="wrap">
-  <div class="sechead"><span class="eyebrow">Our word</span><h2>Three things we will <em>never</em> do</h2><p>A tool that touches your job search should be clear about its limits.</p></div>
-  <div class="oath">
-    <div class="label-tag reveal"><span class="label">No. 1</span><h3>Apply for you</h3><p>It never submits anything. You open the job, you press apply, so every application is one you chose.</p></div>
-    <div class="label-tag reveal"><span class="label">No. 2</span><h3>Invent a skill</h3><p>Tailoring reorders and highlights what is true. A skill is added only after you confirm it.</p></div>
-    <div class="label-tag reveal"><span class="label">No. 3</span><h3>Promise a job</h3><p>The score compares your resume with the description. It cannot predict what a recruiter will do, and we will not pretend it can.</p></div>
+<section class="block"><div class="wrap">
+  <div class="sechead"><h2>Three things ${c.B.name} will never do</h2><p>A tool that touches your job search should be clear about its limits.</p></div>
+  <div class="grid3">
+    <div class="mod ink"><span class="tab">Never</span><h3>Apply for you</h3><p>It never submits anything. You open the job, you press apply, so every application is one you chose.</p></div>
+    <div class="mod ink"><span class="tab">Never</span><h3>Invent a skill</h3><p>Tailoring reorders and highlights what is true. A skill is added only after you confirm it.</p></div>
+    <div class="mod ink"><span class="tab">Never</span><h3>Promise a job</h3><p>The score compares your resume with the description. It cannot predict what a recruiter will do, and we will not pretend it can.</p></div>
   </div>
 </div></section>
 <section class="block"><div class="wrap">
-  <div class="sechead"><span class="eyebrow">Pricing</span><h2>Start free. Pay when your search gets <em>busy</em>.</h2></div>
-  <div class="grid">
-    <div class="card seam plan reveal"><h3>Free</h3><div class="price">₹0</div><p class="muted">50 credits to start. One credit is one job.</p><ul><li>Save, match and tailor each job</li><li>Interview prep and Ask AI for each job</li><li>Job board and resume editor</li></ul></div>
-    <div class="card seam plan featured reveal"><span class="badge">Pay as you go</span><h3>Credit packs</h3><div class="price">₹499 <small>/ 100 credits</small></div><p class="muted">Also 30 credits for ₹199 and 300 for ₹1,299. One-time payment, no subscription, credits never expire.</p><ul><li>Same features as Free</li><li>Pay only for the jobs you apply to</li></ul><a class="btn on-dark" href="#waitlist">Join the waitlist</a></div>
+  <div class="sechead"><h2>Start free. Pay when your search gets busy.</h2><p>One credit is one job. One-time payment, no subscription, credits never expire.</p></div>
+  <div class="grid4">
+    <div class="mod plan"><span class="tab">Free</span><div class="price">₹0</div><p>50 credits when you sign up. No card needed.</p></div>
+    <div class="mod plan"><span class="tab">30 credits</span><div class="price">₹199</div><p>₹6.6 per job.</p></div>
+    <div class="mod plan ink"><span class="tab">100 credits</span><div class="price">₹499</div><p>₹5 per job.</p></div>
+    <div class="mod plan"><span class="tab">300 credits</span><div class="price">₹1,299</div><p>₹4.3 per job.</p></div>
   </div>
-  <p style="margin-top:22px"><a href="${c.u('pricing')}">See pricing in full →</a></p>
+  <p style="margin-top:18px"><a href="${c.u('pricing')}">See pricing in full</a></p>
 </div></section>
-<section class="block paper"><div class="wrap narrow">
-  <div class="sechead"><span class="eyebrow">Free tool</span><h2>Check your resume against a job <em>right now</em></h2><p>Paste both and see which required skills your resume mentions. It runs in your browser: nothing you paste is uploaded.</p></div>
-  <a class="btn primary" href="${c.u('tools/resume-keyword-checker')}">Open the keyword checker</a>
+<section class="block"><div class="wrap">
+  <div class="mod ink" style="display:grid;gap:14px;max-width:820px"><span class="tab">Free tool</span><h2>Check your resume against a job right now</h2><p>Paste both and see which required skills your resume mentions. It runs in your browser: nothing you paste is uploaded.</p><div><a class="btn primary" href="${c.u('tools/resume-keyword-checker')}">Open the keyword checker</a></div></div>
 </div></section>
 <section class="block" id="waitlist"><div class="wrap">
   <div class="band">
-    <span class="eyebrow" style="color:var(--chalk)">Early access</span>
-    <h2>Be first through the <em>door</em>.</h2>
+    <span class="tab">Early access</span>
+    <h2>Be first through the door.</h2>
     <p>We are letting people in gradually. Leave your email and we will write when your spot is ready. One email, no spam, and you can leave any time.</p>
     ${waitlist(c, 'home')}
   </div>
@@ -117,10 +105,10 @@ export const PAGES = [
   {
     slug: 'how-it-works', nav: 'How it works', title: () => 'How it works: capture a job, tailor your resume', desc: 'Upload your resume once, capture any job with the extension, review the score and gaps, download a tailored PDF and prepare for the interview.',
     body: (c) => `
-<div class="wrap narrow"><div class="pagehead"><h1>How it <em>works</em></h1><p class="lead">Six small steps. The first takes a minute, the rest repeat for every job.</p></div><div class="prose" style="padding-bottom:100px">
+<div class="wrap narrow"><div class="pagehead"><h1>How it works</h1><p class="lead">Six small steps. The first takes a minute, the rest repeat for every job.</p></div><div class="prose" style="padding-bottom:100px">
   <h2>1. Upload your resume</h2><p>Upload a PDF, DOCX or text file. We read the layout: headings, bullet style, date format, fonts and spacing. Your profile (name, contact details, experience, skills) is built from it, so there is no long form to fill. You confirm what we found and fix anything that is off.</p>
   <h2>2. Capture a job</h2><p>Open a job page or a LinkedIn hiring post and click the extension. It reads the visible text, finds the title and company, and sends it to your dashboard. You can also paste a description directly into the dashboard. Capturing the same job twice updates it rather than adding a duplicate.</p>
-  <h2>3. See the match and the gaps</h2><p>The score is built from four checks with fixed weights: required skills, nice-to-have skills, years of experience and role similarity. Each missing skill is listed. If you do have one, click “I have this” and it is saved to your profile, the score updates, and the skill is added to future tailored resumes.</p>
+  <h2>3. See the match and the gaps</h2><p>The score is built from four checks with fixed weights: required skills, nice-to-have skills, years of experience and role similarity. Each missing skill is listed. If you do have one, confirm it and it is saved to your profile, the score updates, and the skill is added to future tailored resumes.</p>
   <div class="callout">We never add a skill you have not confirmed. The tailoring step only reorders, highlights and uses what is already true.</div>
   <h2>4. Tailor and download</h2><p>A tailored copy keeps your layout and puts the most relevant bullets first, highlights your numbers and moves matching skills forward. Edit anything in the dashboard, see the live preview and download the PDF. The PDF is plain, selectable text, which is what applicant tracking systems read best.</p>
   <h2>5. Prepare for the interview</h2><p>Each job gets a brief: what they are looking for, where you are strong, gaps and how to frame them honestly, and likely questions with answers drafted from your resume. With AI on, it also researches the company and cites its sources. These are predictions, not what you will definitely be asked.</p>
@@ -132,12 +120,12 @@ export const PAGES = [
     slug: 'pricing', nav: 'Pricing', title: () => 'Pricing: 50 free credits, then pay as you go', desc: 'Start with 50 free credits. One credit covers one job. Buy more in packs from ₹199. One-time payment, no subscription.',
     body: (c) => `
 <div class="wrap" style="padding-bottom:100px">
-  <div class="pagehead"><h1>Simple <em>pricing</em></h1><p class="lead">Start free with 50 credits. One credit covers one job. Pay only when you need more. Prices are in rupees and include GST.</p></div>
+  <div class="pagehead"><h1>Simple pricing</h1><p class="lead">Start free with 50 credits. One credit covers one job. Pay only when you need more. Prices are in rupees and include GST.</p></div>
   <div class="grid">
-    <div class="card seam plan"><h3>Free</h3><div class="price">₹0</div><p class="muted">50 credits when you sign up.</p><ul class="prose"><li>Match score and skill gaps</li><li>Tailored resume in your own layout</li><li>Interview prep and Ask AI for each job</li><li>Job board, notes, resume editor and PDF</li></ul><a class="btn primary" href="${c.u('index')}#waitlist">Get started</a></div>
-    <div class="card seam plan featured"><span class="badge">Best value</span><h3>100 credits</h3><div class="price">₹499</div><p class="muted">₹5 per job. One-time payment.</p><ul class="prose"><li>Everything in Free</li><li>Credits never expire</li><li>No subscription, nothing to cancel</li></ul></div>
-    <div class="card seam plan"><h3>30 credits</h3><div class="price">₹199</div><p class="muted">₹6.6 per job. For a short search.</p></div>
-    <div class="card seam plan"><h3>300 credits</h3><div class="price">₹1,299</div><p class="muted">₹4.3 per job. For a long, busy search.</p></div>
+    <div class="mod plan"><span class="tab">Free</span><h3>Free</h3><div class="price">₹0</div><p class="muted">50 credits when you sign up.</p><ul class="prose"><li>Match score and skill gaps</li><li>Tailored resume in your own layout</li><li>Interview prep and Ask AI for each job</li><li>Job board, notes, resume editor and PDF</li></ul><a class="btn primary" href="${c.u('index')}#waitlist">Get started</a></div>
+    <div class="mod plan ink"><span class="tab">Best value</span><h3>100 credits</h3><div class="price">₹499</div><p class="muted">₹5 per job. One-time payment.</p><ul class="prose"><li>Everything in Free</li><li>Credits never expire</li><li>No subscription, nothing to cancel</li></ul></div>
+    <div class="mod plan"><span class="tab">Short search</span><h3>30 credits</h3><div class="price">₹199</div><p class="muted">₹6.6 per job. For a short search.</p></div>
+    <div class="mod plan"><span class="tab">Busy search</span><h3>300 credits</h3><div class="price">₹1,299</div><p class="muted">₹4.3 per job. For a long, busy search.</p></div>
   </div>
   <h2 style="margin-top:56px;margin-bottom:8px">Questions about pricing</h2>
   <details><summary>What is a credit?</summary><p>One credit is one job. It covers saving the job, the match score, your tailored resume, interview prep and Ask AI for that job. Tailoring the same job again does not use another credit.</p></details>
@@ -149,7 +137,7 @@ export const PAGES = [
   {
     slug: 'faq', nav: 'FAQ', title: () => 'FAQ: privacy, AI, supported sites and limits', desc: 'Answers about what the extension does, what it never does, which sites it supports, how AI is used, pricing and your data.',
     schema: (c) => [{ '@type': 'FAQPage', mainEntity: faqItems(c).map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }],
-    body: (c) => `<div class="wrap narrow" style="padding-bottom:100px"><div class="pagehead"><h1>Frequently asked <em>questions</em></h1></div>${faqItems(c).map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('')}
+    body: (c) => `<div class="wrap narrow" style="padding-bottom:100px"><div class="pagehead"><h1>Frequently asked questions</h1></div>${faqItems(c).map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('')}
   <p style="margin-top:32px" class="muted">Something missing? Email <a href="mailto:${c.B.supportEmail}">${c.B.supportEmail}</a>.</p></div>`,
   },
   {
@@ -158,13 +146,13 @@ export const PAGES = [
     extraHead: (c) => '', script: 'checker',
     body: (c) => `
 <div class="wrap narrow" style="padding-bottom:100px">
-  <div class="pagehead"><div class="crumbs"><a href="${c.u('index')}">Home</a> / Tools</div><h1>Resume keyword <em>checker</em></h1><p class="lead">See which skills a job asks for that your resume does not mention yet. Paste your resume text and the job description. Everything runs in your browser, so nothing is uploaded or stored.</p></div>
+  <div class="pagehead"><div class="crumbs"><a href="${c.u('index')}">Home</a> / Tools</div><h1>Resume keyword checker</h1><p class="lead">See which skills a job asks for that your resume does not mention yet. Paste your resume text and the job description. Everything runs in your browser, so nothing is uploaded or stored.</p></div>
   <div class="cols2">
     <label><strong>Your resume (text)</strong><textarea id="resume" placeholder="Paste your resume text here"></textarea></label>
     <label><strong>Job description</strong><textarea id="jd" placeholder="Paste the full job description, including the requirements"></textarea></label>
   </div>
   <div class="row" style="margin-top:16px"><button class="btn primary" id="check" type="button">Check keywords</button></div>
-  <div id="result" hidden class="card" style="margin-top:24px" aria-live="polite">
+  <div id="result" hidden class="mod" style="margin-top:24px" aria-live="polite">
     <h2 id="score"></h2><p id="summary" class="muted"></p>
     <h3>Required skills you already mention</h3><div class="chips" id="have"></div>
     <h3>Required skills missing from your resume</h3><div class="chips" id="missing"></div>
@@ -176,8 +164,8 @@ export const PAGES = [
   },
   {
     slug: 'guides', nav: 'Guides', title: () => 'Guides: resumes, applications and interviews for Indian job seekers', desc: 'Practical, honest guides on tailoring a resume, tracking applications and preparing for interviews.',
-    body: (c) => `<div class="wrap" style="padding-bottom:100px"><div class="pagehead"><h1>The <em>guides</em></h1><p class="lead">Practical advice for people looking for work in India. No tricks and no invented statistics.</p></div>
-  <div class="grid">${c.guides.map((g) => `<a class="card seam guidecard" href="${c.u(g.slug)}"><span class="eyebrow">${g.tag}</span><h3>${g.h1}</h3><p class="muted">${g.desc}</p><span class="go">Read the guide →</span></a>`).join('')}</div></div>`,
+    body: (c) => `<div class="wrap" style="padding-bottom:100px"><div class="pagehead"><h1>The guides</h1><p class="lead">Practical advice for people looking for work in India. No tricks and no invented statistics.</p></div>
+  <div class="grid">${c.guides.map((g) => `<a class="mod guidecard" href="${c.u(g.slug)}"><span class="tab">${g.tag}</span><h3>${g.h1}</h3><p class="muted">${g.desc}</p><span class="go">Read the guide →</span></a>`).join('')}</div></div>`,
   },
   {
     slug: 'about', nav: false, title: (B) => `About ${B.name}`, desc: 'Why we are building a job-search tool around tailoring, tracking and interview prep, and what we will not do.',

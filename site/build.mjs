@@ -11,9 +11,12 @@ import { PAGES, GUIDES } from './pages.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// The brand mark: a sewing button with a cross-stitch (the same drawing the dashboard uses).
-const MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="16" r="10.2" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="1.6 2.2" opacity=".55"/><path d="M11.6 11.6l8.8 8.8M20.4 11.6l-8.8 8.8" stroke="var(--thread)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="11.6" cy="11.6" r="2" fill="currentColor"/><circle cx="20.4" cy="11.6" r="2" fill="currentColor"/><circle cx="11.6" cy="20.4" r="2" fill="currentColor"/><circle cx="20.4" cy="20.4" r="2" fill="currentColor"/></svg>';
-const FAVICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#151a3a"/><circle cx="16" cy="16" r="11" fill="none" stroke="#ece4d4" stroke-width="2"/><path d="M11.8 11.8l8.4 8.4M20.2 11.8l-8.4 8.4" stroke="#ff7a5a" stroke-width="2.4" stroke-linecap="round"/><circle cx="11.8" cy="11.8" r="1.8" fill="#ece4d4"/><circle cx="20.2" cy="11.8" r="1.8" fill="#ece4d4"/><circle cx="11.8" cy="20.2" r="1.8" fill="#ece4d4"/><circle cx="20.2" cy="20.2" r="1.8" fill="#ece4d4"/></svg>';
+// The brand lockup: the two-module R (tall ink block, red block, open outlined block) and the name in Noto Sans JP Black.
+// The same drawing as web/js/logo.js, drawn still (no animation on the website). The page loads the font (site.css).
+const RED = '#d0021b', INK = '#111111';
+const R_MARK = `<rect x="0" y="4" width="22" height="48" fill="${INK}"/><rect x="26" y="4" width="22" height="22" fill="${RED}"/><rect x="27.5" y="31.5" width="19" height="19" fill="none" stroke="${INK}" stroke-width="3"/>`;
+const MARK = `<svg viewBox="0 0 230 56" role="img" aria-label="Rolemate" width="140" height="34">${R_MARK}<text x="62" y="40" textLength="164" lengthAdjust="spacingAndGlyphs" font-family="'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="32" fill="${INK}">Rolemate</text></svg>`;
+const FAVICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 56">${R_MARK}</svg>`;
 const PLACEHOLDER = /example\.com|\[[^\]]+\]/;
 
 export function placeholderProblems(B = BRAND) {
@@ -64,17 +67,17 @@ export async function buildSite({ mode = 'preview', out = join(here, 'dist'), de
 <html lang="en-IN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(p.desc)}">${canonical}${robots}
 <meta property="og:type" content="${p.isGuide ? 'article' : 'website'}"><meta property="og:site_name" content="${esc(B.name)}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(p.desc)}"><meta property="og:url" content="${abs(p.path)}"><meta property="og:locale" content="en_IN">${ogImg}
-<link rel="icon" type="image/svg+xml" href="${asset('icon.svg')}"><link rel="apple-touch-icon" href="${asset('icon.png')}"><meta name="theme-color" content="#151a3a"><script>document.documentElement.classList.add("js")</script><link rel="stylesheet" href="${asset('site.css')}">${prod ? `<link rel="alternate" type="application/rss+xml" title="${esc(B.name)} guides" href="/rss.xml">` : ''}
+<link rel="icon" type="image/svg+xml" href="${asset('icon.svg')}"><link rel="apple-touch-icon" href="${asset('icon.png')}"><meta name="theme-color" content="#ffffff"><script>document.documentElement.classList.add("js")</script><link rel="stylesheet" href="${asset('site.css')}">${prod ? `<link rel="alternate" type="application/rss+xml" title="${esc(B.name)} guides" href="/rss.xml">` : ''}
 <script type="application/ld+json">${ld}</script></head>
 <body>${prod ? '' : '<div class="preview-bar">Preview build: not indexed, waitlist not connected, company details are placeholders.</div>'}
-<header class="site"><div class="wrap"><a class="logo" href="${u('index')}"><span class="logomark">${MARK}</span>${esc(B.name)}</a><nav class="main" aria-label="Main">${nav}<a class="btn primary sm" href="${u('index')}#waitlist">Join the waitlist</a></nav></div></header>
+<header class="site"><div class="wrap"><a class="logo" href="${u('index')}" aria-label="${esc(B.name)} home">${MARK}</a><nav class="main" aria-label="Main">${nav}<a class="btn primary sm" href="${u('index')}#waitlist">Join the waitlist</a></nav></div></header>
 <main>${body}</main>
 <footer class="site"><div class="wrap"><div class="cols">
-<div><a class="logo" href="${u('index')}"><span class="logomark">${MARK}</span>${esc(B.name)}</a><p style="margin-top:14px;max-width:30ch;color:var(--rail-muted)">${esc(B.tagline)}</p></div>
+<div><a class="logo" href="${u('index')}" aria-label="${esc(B.name)} home">${MARK}</a><p style="margin-top:14px;max-width:30ch;color:var(--muted)">${esc(B.tagline)}</p></div>
 <div><h3>Product</h3><ul><li><a href="${u('how-it-works')}">How it works</a></li><li><a href="${u('pricing')}">Pricing</a></li><li><a href="${u('faq')}">FAQ</a></li><li><a href="${u('tools/resume-keyword-checker')}">Keyword checker</a></li></ul></div>
 <div><h3>Learn</h3><ul>${guides.map((g) => `<li><a href="${u(g.path)}">${esc(g.tag)}</a></li>`).join('')}<li><a href="${u('guides')}">All guides</a></li></ul></div>
 <div><h3>Company</h3><ul><li><a href="${u('about')}">About</a></li><li><a href="${u('contact')}">Contact</a></li><li><a href="${u('privacy')}">Privacy</a></li><li><a href="${u('terms')}">Terms</a></li><li><a href="${u('refund')}">Refunds</a></li></ul></div>
-</div><div class="big" aria-hidden="true">${esc(B.name)}</div><div class="fine">© ${today.slice(0, 4)} ${esc(B.legalName)}. ${esc(B.address)}${B.gstin && !PLACEHOLDER.test(B.gstin) ? `. GSTIN ${esc(B.gstin)}` : ''}. ${esc(B.name)} does not apply to jobs on your behalf and cannot guarantee interviews or offers.</div></div></footer>
+</div><div class="fine">© ${today.slice(0, 4)} ${esc(B.legalName)}. ${esc(B.address)}${B.gstin && !PLACEHOLDER.test(B.gstin) ? `. GSTIN ${esc(B.gstin)}` : ''}. ${esc(B.name)} does not apply to jobs on your behalf and cannot guarantee interviews or offers.</div></div></footer>
 <script type="module" src="${asset('site.js')}"></script>${p.script ? `<script type="module" src="${asset(p.script + '.js')}"></script>` : ''}
 </body></html>
 `;
@@ -93,7 +96,7 @@ export async function buildSite({ mode = 'preview', out = join(here, 'dist'), de
   cpSync(join(here, 'assets', 'site.css'), join(out, 'assets', 'site.css'));
   cpSync(join(here, 'assets', 'site.js'), join(out, 'assets', 'site.js'));
   cpSync(join(here, 'assets', 'checker.js'), join(out, 'assets', 'checker.js'));
-  cpSync(join(root, 'web', 'icon.png'), join(out, 'assets', 'icon.png'));
+  cpSync(join(here, 'assets', 'icon.png'), join(out, 'assets', 'icon.png'));
   for (const f of ['shot-job.jpg', 'shot-board.jpg']) if (existsSync(join(here, 'assets', f))) cpSync(join(here, 'assets', f), join(out, 'assets', f));
   cpSync(join(here, 'assets', 'fonts'), join(out, 'assets', 'fonts'), { recursive: true });
   cpSync(join(root, 'server', 'lib', 'skills.js'), join(out, 'assets', 'lib', 'skills.js'));
@@ -113,8 +116,8 @@ export async function buildSite({ mode = 'preview', out = join(here, 'dist'), de
 
 function guideBody(g, c) {
   return `<article class="wrap narrow guide"><div class="crumbs"><a href="${c.u('index')}">Home</a> / <a href="${c.u('guides')}">Guides</a></div>
-<span class="eyebrow">${esc(g.tag)}</span><h1>${esc(g.h1)}</h1><div class="meta">Updated ${esc(g.date)} · ${esc(c.B.name)}</div><div class="prose">${g.body(c)}</div>
-<div class="band" style="margin-top:56px;padding:36px"><h2 style="font-size:2rem">Get early access</h2><p>${esc(c.B.tagline)}</p><div><a class="btn" href="${c.u('index')}#waitlist">Join the waitlist</a></div></div></article>`;
+<h1>${esc(g.h1)}</h1><div class="meta"><span class="tag">${esc(g.tag)}</span>Updated ${esc(g.date)} · ${esc(c.B.name)}</div><div class="prose">${g.body(c)}</div>
+<div class="band" style="margin-top:56px"><span class="tab">Early access</span><h2 style="font-size:2rem">Get early access</h2><p>${esc(c.B.tagline)}</p><div><a class="btn primary" href="${c.u('index')}#waitlist">Join the waitlist</a></div></div></article>`;
 }
 
 async function ogImage(out, B) {
@@ -124,7 +127,9 @@ async function ogImage(out, B) {
     const exe = [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((p) => p && existsSync(p));
     const b = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
     const page = await b.newPage({ viewport: { width: 1200, height: 630 } });
-    await page.setContent(`<body style="margin:0;width:1200px;height:630px;display:flex;flex-direction:column;justify-content:center;gap:24px;padding:0 90px;box-sizing:border-box;background:#f6f7ff;font-family:Inter,Arial,sans-serif;color:#0f1424"><div style="display:flex;align-items:center;gap:16px;font-weight:700;font-size:38px"><span style="display:grid;place-items:center;width:64px;height:64px;border-radius:18px;background:#4f46e5;color:#fff">${esc(B.mark)}</span>${esc(B.name)}</div><div style="font-size:68px;font-weight:700;line-height:1.1;letter-spacing:-2px;max-width:960px">${esc(B.tagline)}</div><div style="font-size:30px;color:#3a4157">Match score · tailored resume · interview prep</div></body>`);
+    const font = readFileSync(join(here, 'assets', 'fonts', 'noto-sans-jp-latin.woff2')).toString('base64');
+    await page.setContent(`<style>@font-face{font-family:"Noto Sans JP";font-weight:100 900;src:url(data:font/woff2;base64,${font}) format("woff2")}</style><body style="margin:0;width:1200px;height:630px;display:flex;flex-direction:column;justify-content:center;gap:28px;padding:0 80px;box-sizing:border-box;background:#fff;border-top:16px solid #111;font-family:'Noto Sans JP',Arial,sans-serif;color:#111"><svg viewBox="0 0 230 56" width="300" height="73"><rect x="0" y="4" width="22" height="48" fill="#111"/><rect x="26" y="4" width="22" height="22" fill="#d0021b"/><rect x="27.5" y="31.5" width="19" height="19" fill="none" stroke="#111" stroke-width="3"/><text x="62" y="40" textLength="164" lengthAdjust="spacingAndGlyphs" font-family="'Noto Sans JP',Arial,sans-serif" font-weight="900" font-size="32" fill="#111">${esc(B.name)}</text></svg><div style="font-size:78px;font-weight:900;line-height:1.05;letter-spacing:-2.5px;max-width:1000px">${esc(B.tagline)}</div><div style="display:flex;gap:0;font-size:28px;font-weight:900"><span style="background:#d0021b;color:#fff;padding:6px 18px">Match score</span><span style="padding:6px 18px;border:1px solid #e9ecef">Tailored resume</span><span style="padding:6px 18px;border:1px solid #e9ecef">Interview prep</span></div></body>`);
+    await page.evaluate(() => document.fonts.ready);
     writeFileSync(join(out, 'assets', 'og.png'), await page.screenshot());
     await b.close();
   } catch (e) { console.warn('OG image skipped:', e.message); }
