@@ -211,8 +211,18 @@ footer { border-top: 2px solid var(--ink); padding: 32px 0 calc(32px + env(safe-
   var n = document.querySelector('[data-count]');
   if (n) { var to = +n.getAttribute('data-count'), t0 = null; n.textContent = '0';
     setTimeout(function () { requestAnimationFrame(function tick(t) { t0 = t0 || t; var p = Math.min(1, (t - t0) / 1100); n.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(tick); }); }, 1700); }
-  // failsafe: never leave content hidden
-  setTimeout(function () { targets.forEach(function (el) { el.classList.add('in'); }); }, 6000);
+  // failsafe: only if the observer never reports anything (it must not reveal content the visitor has not scrolled to)
+  var seen = false; var io2 = new IntersectionObserver(function () { seen = true; io2.disconnect(); }); io2.observe(document.body);
+  setTimeout(function () { if (!seen) targets.forEach(function (el) { el.classList.add('in'); }); }, 3000);
+  // hovering a logo plays its assemble animation again
+  document.querySelectorAll('a.logo').forEach(function (a) {
+    var parts = a.querySelectorAll('.rm-ink,.rm-red,.rm-box,.rm-name');
+    a.addEventListener('mouseenter', function () {
+      parts.forEach(function (el) { el.style.animation = 'none'; });
+      void a.offsetWidth;
+      parts.forEach(function (el) { el.style.animation = ''; });
+    });
+  });
 })();
 </script>
 </body>
