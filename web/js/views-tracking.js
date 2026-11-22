@@ -73,7 +73,7 @@ function checklist(me, jobs, go) {
   if (nowAt === -1) {
     if (store.get(userKey(me, 'setup'), '') === '1') return null;
     store.set(userKey(me, 'setup'), '1'); // celebrate once, then the normal board takes over
-    return h('div', { class: 'reward-line' }, '🎉 You’re set up: 5 of 5 done. From here, every job you capture gets its own tailored resume.');
+    return h('div', { class: 'reward-line' }, 'You’re set up: 5 of 5 done. From here, every job you capture gets its own tailored resume.');
   }
   if (store.get(userKey(me, 'skip'), '') === '1') return null;
   return h('div', { class: 'card onboard', style: 'margin-bottom:26px' },
@@ -99,7 +99,7 @@ export async function trackingView(me, go) {
       host.append(h('div', { style: 'max-width:820px;margin:0 auto' },
         h('h1', { style: 'font-size:clamp(2rem,4vw,2.6rem)' }, 'Welcome. Let’s get your first tailored resume.'),
         h('p', { class: 'muted', style: 'font-size:1.1rem;margin:12px 0 22px;font-weight:300' }, 'A few quick steps. About 3 minutes.'),
-        credits != null && h('div', { class: 'reward-line' }, '🎁 You have ', h('b', null, `${credits} free credit${credits === 1 ? '' : 's'}`), '. One credit covers one job, from saving it to interview prep.'),
+        credits != null && h('div', { class: 'reward-line' }, 'You have ', h('b', null, `${credits} free credit${credits === 1 ? '' : 's'}`), '. One credit covers one job, from saving it to interview prep.'),
         addJobPanel(go), list));
     } else {
       host.append(pageHead('Jobs'), addJobPanel(go),
@@ -167,17 +167,17 @@ export async function trackingView(me, go) {
   }
 
   const list = checklist(me, jobs, go);
-  const side = list || h('div', { class: 'dside' }, h('h2', null, 'This week'),
-    h('div', { class: 'dweek' }, h('b', null, `${appliedWeek} application${appliedWeek === 1 ? '' : 's'} sent`), h('p', null, appliedWeek >= 4 ? 'A strong week. Keep the interviews first.' : 'One more good-fit job today keeps you moving.')),
+  const side = list || h('div', { class: 'dside dmod' }, h('div', { class: 'dtab' }, 'This week'),
+    h('div', { class: 'dweek' }, h('span', { class: 'big' }, String(appliedWeek)), h('b', null, `application${appliedWeek === 1 ? '' : 's'} sent`), h('p', null, appliedWeek >= 4 ? 'A strong week. Keep the interviews first.' : 'One more good-fit job today keeps you moving.')),
     credits != null && h('div', { class: 'dweek' }, h('b', null, `${credits} credit${credits === 1 ? '' : 's'} left`), h('p', null, 'One credit covers one job: save, tailor, prep and chat. Credits never expire.'), h('a', { href: '#/settings' }, 'Buy more credits')));
   host.classList.add('dash');
   host.append(pageHead('Jobs', `${n('saved')} saved · ${n('applied')} applied · ${talking} interviewing.${appliedWeek ? ` You applied to ${appliedWeek} job${appliedWeek === 1 ? '' : 's'} this week. Nice work.` : ''}`), addJobPanel(go), next.node,
     h('div', { class: 'dcols' },
-      h('section', { 'aria-label': 'Your jobs' }, pipe,
+      h('section', { class: 'dmod', 'aria-label': 'Your jobs' }, h('div', { class: 'dtab' }, 'Jobs'), pipe,
         h('div', { class: 'dtools' }, h('div', { class: 'search' }, icon('search'), search), h('label', { class: 'sort' }, 'Sort ', sorter)),
         h('p', { class: 'dlegend' }, h('b', null, 'Fit'), ' is how many of a job’s required skills your resume covers. The line on each bar is ', h('b', null, '75%'), ', a good score to apply at.'),
         h('div', { class: 'dhdr', 'aria-hidden': 'true' }, h('span', null, 'Role'), h('span', null, 'Fit'), h('span', null, 'Stage')), body),
-      h('aside', { 'aria-label': 'Progress' }, side)));
+      h('aside', { 'aria-label': 'Progress', class: 'dside' }, side)));
   draw();
   if (wantAdd) { wantAdd = false; queueMicrotask(toggleAdd); }
   return host;

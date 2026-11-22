@@ -317,7 +317,7 @@ export async function jobView(id, me, go) {
     const posting = job.url ? h('a', { class: 'btn', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open job posting ↗') : null;
     if (!r) return nextStep({ title: 'Create your resume for this job', sub: 'Same layout, tailored to the job', actions: [h('button', { class: 'btn primary', onclick: tailor }, 'Create resume')] });
     if (['screening', 'interview'].includes(job.status)) return nextStep({ title: `Prepare for your ${STATUS_LABEL[job.status].toLowerCase()}`, sub: 'Likely questions with answers from your resume', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'prep'; draw(); } }, 'Open prep')] });
-    if (job.status === 'offer') return nextStep({ title: 'You got an offer 🎉', sub: 'Use Ask AI to plan your negotiation', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'chat'; draw(); } }, 'Ask AI')] });
+    if (job.status === 'offer') return nextStep({ title: 'You got an offer', sub: 'Use Ask AI to plan your negotiation', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'chat'; draw(); } }, 'Ask AI')] });
     if (job.status === 'applied') return nextStep({ title: 'Applied. Get ready for the call', sub: 'Most screening calls come within two weeks. Prep takes 10 minutes.', actions: [h('button', { class: 'btn primary', onclick: () => { tab = 'prep'; draw(); } }, 'Open prep')] });
     if (job.status === 'rejected') return nextStep({ title: 'Not this one. Keep going', sub: 'Your next match is waiting on the board', actions: [h('a', { class: 'btn primary', href: '#/tracking' }, 'Back to jobs')] });
     if (miss > 0 && !r.downloaded) return nextStep({ title: miss === 1 ? `${missing[0]} isn’t on your resume` : `${miss} required skills aren’t on your resume`, sub: 'Your resume is ready. If you have them, add them and update. If not, you can still apply.', actions: [h('button', { class: 'btn primary', onclick: () => dl(r) }, 'Download PDF'), h('button', { class: 'btn', onclick: toGaps }, 'See what’s missing')] });
@@ -328,7 +328,7 @@ export async function jobView(id, me, go) {
   const move = async (v) => {
     try {
       const r = await api(`/api/jobs/${id}`, { method: 'PATCH', body: { status: v } }); job = { ...job, ...r.job };
-      toast(v === 'applied' ? 'Marked as applied. Nice work 🎉' : `Moved to ${STATUS_LABEL[v]}`); draw();
+      toast(v === 'applied' ? 'Marked as applied. Nice work' : `Moved to ${STATUS_LABEL[v]}`); draw();
     } catch (x) { toast(x.message, true); }
   };
 
