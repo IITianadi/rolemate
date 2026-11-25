@@ -19,7 +19,7 @@ The whole job pipeline in one place: capture, match score, tailored resume, appl
 - Dashboard (app.rolemate.in) plus a Chrome extension; one login for both. Marketing site at rolemate.in.
 - Pipeline stages: Saved, Applied, Screening call, Interview, Offer, Rejected.
 - Match score 0-100 with required skills covered and missing; 75% is shown as a good target to apply.
-- Pricing is credits: 50 free on signup, one credit per job, packs of 30, 100 and 300, no subscription.
+- Pricing is credits: 25 free on signup, one credit per job, packs of 30, 100 and 300, no subscription.
 - Sign up with email or Google.
 
 ## Capabilities and Constraints

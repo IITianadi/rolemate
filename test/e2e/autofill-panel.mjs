@@ -19,7 +19,8 @@ const root = join(here, '..', '..');
 const tmp = mkdtempSync(join(tmpdir(), 'rolemate-panel-'));
 const listen = (s) => new Promise((r) => s.listen(0, '127.0.0.1', () => r(s.address().port)));
 
-const dashServer = createApp({ dbPath: ':memory:' }).listen(0, '127.0.0.1');
+const dashApp = createApp({ dbPath: ':memory:' });
+const dashServer = dashApp.listen(0, '127.0.0.1');
 await new Promise((r) => dashServer.once('listening', r));
 const DASH = `http://127.0.0.1:${dashServer.address().port}`;
 const site = http.createServer((req, res) => {
@@ -46,6 +47,9 @@ cpSync(join(root, 'extension'), extDir, { recursive: true });
 const mf = JSON.parse(readFileSync(join(extDir, 'manifest.json'), 'utf8'));
 mf.host_permissions = [`${SITE}/*`, `${DASH}/*`];
 writeFileSync(join(extDir, 'manifest.json'), JSON.stringify(mf));
+// The popup has the production server built in; point this test copy at the local one.
+const popupJs = readFileSync(join(extDir, 'popup.js'), 'utf8');
+writeFileSync(join(extDir, 'popup.js'), popupJs.replace("const SERVER = 'https://app.rolemate.in';", `const SERVER = '${DASH}';`));
 const exe = findExtensionBrowser();
 const ctx = await chromium.launchPersistentContext(join(tmp, 'profile'), { executablePath: exe, headless: false, viewport: { width: 1000, height: 900 }, args: ['--headless=new', '--no-sandbox', `--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`] });
 
@@ -252,6 +256,23 @@ try {
       assert.equal((await api('/api/autofill/draft', { method: 'POST', token: t2, body: { jobId, questions: q } })).status, 404, 'cannot draft against someone else\'s job');
       assert.equal((await api(`/api/autofill/jobs/${jobId}/data`, { token: t2 })).status, 404, 'cannot fetch fill data for someone else\'s job');
     } finally { await probe.evaluate((t) => chrome.storage.local.set({ token: t }), token); }
+  });
+
+  await step('popup: a job that was saved from an application form page says so and points to the real posting', async () => {
+    const FORM_URL = 'https://relx.wd3.myworkdayjobs.com/en-US/relx/job/Product-manager-II_R1/apply/autofillWithResume';
+    const uid = dashApp.locals.db.prepare("SELECT id FROM users WHERE email = 'panel@example.com'").get().id;
+    dashApp.locals.db.prepare("INSERT INTO jobs (user_id, title, company, url, jd_text, status, job_key) VALUES (?, 'Product manager II', 'RELX', ?, ?, 'saved', ?)")
+      .run(uid, FORM_URL, 'Back to Job Posting Product manager II Autofill with Resume My Information My Experience * Indicates a required field Upload either DOC, DOCX or PDF Drop file here or Select file Continue', FORM_URL);
+    const real = await ctx.newPage(); await real.goto(`${SITE}/post.html`); // a real tab to read; the popup is told it is the Workday form
+    const realId = await probe.evaluate(async (u) => (await chrome.tabs.query({})).find((t) => t.url === u).id, `${SITE}/post.html`);
+    const pop = await ctx.newPage();
+    await pop.addInitScript(([id, u]) => { const orig = chrome.tabs.query.bind(chrome.tabs); chrome.tabs.query = async (q) => (q && q.active ? [{ id, url: u }] : orig(q)); }, [realId, FORM_URL]);
+    await pop.goto(`chrome-extension://${extId}/popup.html`);
+    await pop.waitForSelector('text=Saved from the form, not the job', { timeout: 15000 });
+    const t = await pop.locator('main').innerText();
+    assert.match(t, /Back to Job Posting/); assert.match(t, /no extra credit/); assert.doesNotMatch(t, /Capture again/);
+    dashApp.locals.db.prepare("DELETE FROM jobs WHERE url = ?").run(FORM_URL);
+    await pop.close(); await real.close();
   });
 
   await step('dashboard: Application details and Saved answers are editable', async () => {

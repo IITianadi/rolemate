@@ -20,20 +20,20 @@ const faqItems = (c) => [
   ['Does it guarantee that I will pass an ATS or get shortlisted?', 'No tool can promise that. The match score compares your resume with the job description. It tells you which required skills your resume does and does not mention. How a recruiter or a company\'s system ranks you is outside our control.'],
   ['What does the AI do, and what happens without it?', 'AI reads the job posting, helps write your interview prep and answers your questions in Ask AI. The match score and tailoring follow fixed rules, so they never add anything to your resume that is not already there.'],
   ['What happens to my resume and data?', 'Your resume and jobs are stored against your account so the dashboard can show them. You can export everything or delete your account from Settings. See the privacy policy for details.'],
-  ['What does it cost?', 'Every account starts with 50 free credits. One credit covers one job: saving it, tailoring your resume, interview prep and Ask AI for that job. When they run out you can buy more in packs, for example 100 credits for ₹499. It is a one-time payment, not a subscription, and credits do not expire.'],
+  ['What does it cost?', 'Every account starts with 25 free credits. One credit covers one job: saving it, tailoring your resume, interview prep and Ask AI for that job. When they run out you can buy more in packs, for example 100 credits for ₹499. It is a one-time payment, not a subscription, and credits do not expire.'],
 ];
 
 export const PAGES = [
   {
     slug: 'index', nav: false, title: (B) => `${B.name}: tailor your resume to every job`, desc: 'A Chrome extension and dashboard that tailors your resume to each job in your own layout, shows missing skills and prepares you for the interview.',
-    schema: (c) => [{ '@type': 'SoftwareApplication', name: c.B.name, applicationCategory: 'BusinessApplication', operatingSystem: 'Chrome', description: c.B.description, offers: [{ '@type': 'Offer', price: '0', priceCurrency: 'INR', name: '50 free credits' }, { '@type': 'Offer', price: '199', priceCurrency: 'INR', name: '30 credits' }, { '@type': 'Offer', price: '499', priceCurrency: 'INR', name: '100 credits' }, { '@type': 'Offer', price: '1299', priceCurrency: 'INR', name: '300 credits' }] }],
+    schema: (c) => [{ '@type': 'SoftwareApplication', name: c.B.name, applicationCategory: 'BusinessApplication', operatingSystem: 'Chrome', description: c.B.description, offers: [{ '@type': 'Offer', price: '0', priceCurrency: 'INR', name: '25 free credits' }, { '@type': 'Offer', price: '199', priceCurrency: 'INR', name: '30 credits' }, { '@type': 'Offer', price: '499', priceCurrency: 'INR', name: '100 credits' }, { '@type': 'Offer', price: '1299', priceCurrency: 'INR', name: '300 credits' }] }],
     body: (c) => `
 <div class="wrap hero">
   <div class="copy">
     <h1>Apply with a resume that fits every&nbsp;job.</h1>
     <p class="lead">Open a job. ${c.B.name} measures it against your resume, shows what is missing, and cuts a tailored copy in your own layout, with an interview brief for that company. You stay in control and press apply yourself.</p>
     <div class="row"><a class="btn primary lg" href="#waitlist">Join the waitlist</a>${c.demo ? `<a class="btn lg" href="${c.demo}" target="_blank" rel="noopener">Try the live demo</a>` : `<a class="btn lg" href="${c.u('how-it-works')}">See how it works</a>`}</div>
-    <p class="fine-line"><b>50 free credits</b> to start. No card needed.</p>
+    <p class="fine-line"><b>25 free credits</b> to start. No card needed.</p>
   </div>
   <div class="mod proof" role="group" aria-label="A sample job: 79 percent fit, one missing skill, and six pipeline stages.">
     <span class="tab">Fit</span>
@@ -84,7 +84,7 @@ export const PAGES = [
 <section class="block"><div class="wrap">
   <div class="sechead"><h2>Start free. Pay when your search gets busy.</h2><p>One credit is one job. One-time payment, no subscription, credits never expire.</p></div>
   <div class="grid4">
-    <div class="mod plan"><span class="tab">Free</span><div class="price">₹0</div><p>50 credits when you sign up. No card needed.</p></div>
+    <div class="mod plan"><span class="tab">Free</span><div class="price">₹0</div><p>25 credits when you sign up. No card needed.</p></div>
     <div class="mod plan"><span class="tab">30 credits</span><div class="price">₹199</div><p>₹6.6 per job.</p></div>
     <div class="mod plan ink"><span class="tab">100 credits</span><div class="price">₹499</div><p>₹5 per job.</p></div>
     <div class="mod plan"><span class="tab">300 credits</span><div class="price">₹1,299</div><p>₹4.3 per job.</p></div>
@@ -120,12 +120,12 @@ export const PAGES = [
 </div></div>`,
   },
   {
-    slug: 'pricing', nav: 'Pricing', title: () => 'Pricing: 50 free credits, then pay as you go', desc: 'Start with 50 free credits. One credit covers one job. Buy more in packs from ₹199. One-time payment, no subscription.',
+    slug: 'pricing', nav: 'Pricing', title: () => 'Pricing: 25 free credits, then pay as you go', desc: 'Start with 25 free credits. One credit covers one job. Buy more in packs from ₹199. One-time payment, no subscription.',
     body: (c) => `
 <div class="wrap" style="padding-bottom:100px">
-  <div class="pagehead"><h1>Simple pricing</h1><p class="lead">Start free with 50 credits. One credit covers one job. Pay only when you need more. Prices are in rupees and include GST.</p></div>
+  <div class="pagehead"><h1>Simple pricing</h1><p class="lead">Start free with 25 credits. One credit covers one job. Pay only when you need more. Prices are in rupees and include GST.</p></div>
   <div class="grid">
-    <div class="mod plan"><span class="tab">Free</span><h3>Free</h3><div class="price">₹0</div><p class="muted">50 credits when you sign up.</p><ul class="prose"><li>Match score and skill gaps</li><li>Tailored resume in your own layout</li><li>Interview prep and Ask AI for each job</li><li>Job board, notes, resume editor and PDF</li></ul><a class="btn primary" href="${c.u('index')}#waitlist">Get started</a></div>
+    <div class="mod plan"><span class="tab">Free</span><h3>Free</h3><div class="price">₹0</div><p class="muted">25 credits when you sign up.</p><ul class="prose"><li>Match score and skill gaps</li><li>Tailored resume in your own layout</li><li>Interview prep and Ask AI for each job</li><li>Job board, notes, resume editor and PDF</li></ul><a class="btn primary" href="${c.u('index')}#waitlist">Get started</a></div>
     <div class="mod plan ink"><span class="tab">Best value</span><h3>100 credits</h3><div class="price">₹499</div><p class="muted">₹5 per job. One-time payment.</p><ul class="prose"><li>Everything in Free</li><li>Credits never expire</li><li>No subscription, nothing to cancel</li></ul></div>
     <div class="mod plan"><span class="tab">Short search</span><h3>30 credits</h3><div class="price">₹199</div><p class="muted">₹6.6 per job. For a short search.</p></div>
     <div class="mod plan"><span class="tab">Busy search</span><h3>300 credits</h3><div class="price">₹1,299</div><p class="muted">₹4.3 per job. For a long, busy search.</p></div>

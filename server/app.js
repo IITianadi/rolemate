@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword, createSession, userFromToken, destroySess
 import { parseResumeFile, parseWarnings } from './lib/resume-parse.js';
 import { sanitizeResume, httpError } from './lib/model.js';
 import { cleanJdText } from './lib/jd-clean.js';
+import { looksLikeApplicationForm } from './lib/form-page.js';
 import { analyzeFit } from './lib/fit.js';
 import { extractJob, extractBasic, pickTitle, cleanTitle, pickCompany } from './lib/jd.js';
 import { scoreMatch, estimateYears } from './lib/match.js';
@@ -61,7 +62,7 @@ function sseStart(res) {
   return (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
 }
 
-export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_LIMIT || 50), billing = {}, mailer = createMailer(), googleVerify = verifyGoogleToken, codeMax = 8 } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db', freeLimit = Number(process.env.FREE_LIMIT || 25), billing = {}, mailer = createMailer(), googleVerify = verifyGoogleToken, codeMax = 8 } = {}) {
   const bill = billingConfig(billing);
   const appUrl = bill.publicUrl;
   const siteUrl = (process.env.SITE_URL || 'https://rolemate.in').replace(/\/$/, '');
@@ -122,7 +123,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   const jobOut = (r) => {
     const resumes = db.prepare('SELECT id, label, changes, created_at, updated_at, downloaded_at FROM resumes WHERE job_id = ? ORDER BY id DESC').all(r.id)
       .map(({ changes, downloaded_at: dl, ...x }) => ({ ...x, changes: j(changes, []), downloaded: !!dl }));
-    return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, logo: r.logo || '', status: r.status, notes: r.notes, followUpDue: r.follow_up_due || null,
+    return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, logo: r.logo || '', status: r.status, notes: r.notes, followUpDue: r.follow_up_due || null, needsPosting: looksLikeApplicationForm(r.jd_text, r.url),
       credit: (db.prepare('SELECT plan FROM users WHERE id = ?').get(r.user_id)?.plan !== 'free') || !!db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND job_key = ?').get(r.user_id, `job:${r.id}`),
       requirements: j(r.requirements, {}), match: j(r.match, {}), resumes, createdAt: r.created_at, updatedAt: r.updated_at, appliedAt: r.applied_at };
   };
@@ -368,6 +369,8 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     if (text.length < 80) throw httpError(422, 'Not enough text on this page. Select the job description and try again.');
     const url = String(req.body?.url || '').slice(0, 1000);
     const source = String(req.body?.source || '').slice(0, 60);
+    // An application form is not a job posting: saving it would store an empty job and spend a credit on it.
+    if (looksLikeApplicationForm(text, url)) throw httpError(422, 'This looks like the application form, not the job posting. Open the job posting (try “Back to Job Posting”) and capture it there. Nothing was saved and no credit was used.');
     // Hints come from scraping the page, which can grab the wrong element. Structured data is trusted; anything else
     // must be about the text we captured, otherwise we work the title out from the text (or the AI does).
     const hin = req.body?.hints || {};
@@ -414,14 +417,20 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
       // Same address but a different posting (single-page sites, stale pages): keep it as its own job.
       if (!existing && rows.length) jobKey = `${prefix}${shortHash(text)}`;
     }
+    // The real posting of a job that was saved earlier from its application form: replace that empty job (no second credit, no duplicate).
+    let repaired = false;
+    if (!existing && reqs.title) {
+      const fromForm = db.prepare('SELECT * FROM jobs WHERE user_id = ? ORDER BY id DESC LIMIT 200').all(req.user.id).find((row) => looksLikeApplicationForm(row.jd_text, row.url) && norm(row.title) === norm(reqs.title) && (norm(row.company) === norm(reqs.company) || (host && (() => { try { return new URL(row.url).host.toLowerCase() === host; } catch { return false; } })())));
+      if (fromForm) { existing = fromForm; repaired = true; jobKey = baseKey || fromForm.job_key; }
+    }
     const base = scoreMatch({ resume: profile.resume, confirmedSkills: profile.confirmedSkills, yearsExperience: profile.facts.yearsExperience ?? null }, reqs);
     const fit = await analyzeFit(profile.resume, reqs, base, profile.confirmedSkills);
     const match = rescore(profile, reqs, existing ? j(existing.match, {}) : null, fit);
     let jobId;
     if (existing) {
       jobId = existing.id;
-      db.prepare("UPDATE jobs SET title=?, company=?, location=?, jd_text=?, requirements=?, match=?, job_key=?, logo=CASE WHEN ? != '' THEN ? ELSE logo END, updated_at=datetime('now') WHERE id=?")
-        .run(reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), text, JSON.stringify(reqs), JSON.stringify(match), existing.job_key || baseKey, logo, logo, jobId);
+      db.prepare("UPDATE jobs SET title=?, company=?, location=?, jd_text=?, requirements=?, match=?, job_key=?, url=CASE WHEN ? = 1 THEN ? ELSE url END, source=CASE WHEN ? = 1 THEN ? ELSE source END, logo=CASE WHEN ? != '' THEN ? ELSE logo END, updated_at=datetime('now') WHERE id=?")
+        .run(reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), text, JSON.stringify(reqs), JSON.stringify(match), repaired ? jobKey : (existing.job_key || baseKey), repaired ? 1 : 0, url, repaired ? 1 : 0, source, logo, logo, jobId);
     } else {
       const info = db.prepare('INSERT INTO jobs (user_id, title, company, location, url, source, jd_text, requirements, match, job_key, logo) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
         .run(req.user.id, reqs.title.slice(0, 200), reqs.company.slice(0, 120), reqs.location.slice(0, 120), url, source, text, JSON.stringify(reqs), JSON.stringify(match), jobKey, logo);

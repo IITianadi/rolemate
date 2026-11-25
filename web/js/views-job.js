@@ -347,6 +347,8 @@ export async function jobView(id, me, go) {
           ),
         h('div', { class: 'acts' }, stage, job.status === 'saved' && h('button', { class: 'btn primary', onclick: () => move('applied') }, 'Mark as applied'))),
       editing && editForm(),
+      // Saved from an application form page, not the posting: there is no real description, so the score and the tailoring mean little.
+      job.needsPosting && h('div', { class: 'notice', style: 'margin-top:12px' }, 'This job was saved from the application form, not the job posting, so it has no real description. Open the job posting (try “Back to Job Posting” on the form), click Rolemate and capture it there. It replaces this job and uses no extra credit.'),
       next(),
       h('div', { class: 'tabs', role: 'tablist' }, [['overview', 'Fit & resume'], ['info', 'Job info'], ['prep', 'Interview prep'], ['chat', 'Ask AI']].map(([k, l]) =>
         h('button', { class: tab === k ? 'on' : '', role: 'tab', onclick: () => { tab = k; draw(); } }, l))));

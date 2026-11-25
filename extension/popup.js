@@ -261,6 +261,15 @@ async function home() {
   }
   const seen = site.isJobUrl ? await savedJobFor(tab.url) : null;
   const title = String(tab.title || '').replace(/\s*[|–-]\s*(LinkedIn|Naukri\.com|Indeed\.com|Glassdoor|foundit).*$/i, '').trim();
+  // Saved earlier from an application form page, not the posting: no real description, so no meaningful score or tailoring.
+  if (seen?.needsPosting) {
+    return show(el('section', { class: 'ready mod' },
+      el('span', { class: 'tab' }, 'Needs the real posting'),
+      el('h1', {}, 'Saved from the form, not the job'),
+      title && el('p', { class: 'jobline' }, title),
+      el('p', {}, 'This job was saved from an application form, so it has no description and its score means little. Open the job posting (try “Back to Job Posting”) and capture it there. It replaces this job and uses no extra credit.'),
+      el('div', { class: 'row' }, el('button', { class: 'btn primary', onclick: () => openTab(`/#/job/${seen.id}`) }, 'Open in dashboard'))), f);
+  }
   if (seen) {
     const fit = seen.match?.score != null ? ` · ${seen.match.score}% fit` : '';
     return show(el('section', { class: 'ready mod' },
@@ -325,7 +334,8 @@ async function capture(tab, site) {
     clearTimeout(later);
     if (e.status === 401) return signIn('Your session ended. Please sign in again.');
     if (e.status === 409) return needResume();
-    show(message('stop', e.status === 422 ? 'Couldn’t read this job' : 'Something went wrong', e.message, tryAgain()), await footer());
+    const isForm = e.status === 422 && /application form/i.test(e.message);
+    show(message('stop', isForm ? 'This is the application form' : e.status === 422 ? 'Couldn’t read this job' : 'Something went wrong', e.message, isForm ? null : tryAgain()), await footer());
   }
 }
 
