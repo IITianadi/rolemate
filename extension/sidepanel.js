@@ -20,7 +20,7 @@ function el(tag, props = {}, ...kids) {
 }
 const SERVER_OPEN = async (path) => { const { server } = await store.get(); chrome.tabs.create({ url: (server || 'https://app.rolemate.in') + path }); };
 
-const S = { tabId: null, url: '', ctx: null, data: null, wantFill: false, flash: '', forms: [], plan: [], job: null, pickedJob: false, filled: false, changed: false, notice: '', pause: null, busy: false, drafts: {}, applied: null };
+const S = { tabId: null, url: '', ctx: null, data: null, wantFill: false, flash: '', forms: [], plan: [], job: null, filled: false, changed: false, notice: '', pause: null, busy: false, drafts: {}, applied: null };
 
 // ---------- the page
 
@@ -59,16 +59,13 @@ const fillItems = async (items) => {
 };
 const focusField = (p) => inTab([p.frameId], (id) => window.__rolemateAF.focus(id), [p.id]).catch(() => {});
 
-// ---------- which job is this form for
+// ---------- which saved job is this form for? The server decides (same posting, or same company and role); nothing is chosen by hand.
 
-const key = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const pageQuery = () => new URLSearchParams({ url: S.url, title: S.page?.title || '', heading: S.page?.heading || '', site: S.page?.site || '' }).toString();
+const pagePayload = () => ({ url: S.url, title: S.page?.heading || S.page?.title, company: S.job?.company });
 function pickJob() {
-  const jobs = S.ctx.jobs.filter((j) => j.status === 'saved' || j.sameUrl);
-  const same = jobs.find((j) => j.sameUrl);
-  if (same) return same;
-  const hay = key(`${S.page?.title} ${S.page?.heading} ${S.page?.site} ${S.page?.host} ${S.url}`);
-  const hits = jobs.filter((j) => key(j.company).length >= 3 && hay.includes(key(j.company)));
-  return hits.length === 1 ? hits[0] : null;
+  const m = S.ctx.jobs.filter((j) => j.matches);
+  return m.find((j) => j.sameUrl) || m.find((j) => j.credit) || m[0] || null; // prefer the exact posting, then one that is unlocked
 }
 
 // ---------- views
@@ -94,7 +91,7 @@ function jobModule() {
     r ? el('div', { class: 'note' }, el('b', {}, 'Your tailored resume: '), r.label, el('br'), 'Rolemate doesn’t upload files. Download it and attach it to the form’s resume field yourself.',
         el('div', { class: 'row' }, dl, fileField && el('button', { class: 'btn small', onclick: () => focusField(fileField) }, 'Show the resume field')))
       : el('div', { class: 'note warn' }, 'No tailored resume for this job yet. Open it in Rolemate to tailor one, then attach it to the form yourself.', el('div', {}, el('button', { class: 'btn small', onclick: () => SERVER_OPEN(`/#/job/${j.id}`) }, 'Open job in Rolemate'))),
-    !S.pickedJob && S.ctx.jobs.filter((x) => x.status === 'saved' && x.credit).length > 1 && el('button', { class: 'link', onclick: changeJob }, 'Wrong job? Choose another'));
+    null);
 }
 
 // Only what needs the user is on show: what Rolemate couldn't do, what it assumed or couldn't fill, and the file to attach.
@@ -142,7 +139,7 @@ function answerBox(p, review = false) {
 async function draftFor(p) {
   S.busy = true; render();
   try {
-    const r = await callApi('/api/autofill/draft', { method: 'POST', body: { jobId: S.job?.id, page: { title: S.page?.heading || S.page?.title, company: S.job?.company }, questions: [{ id: p.id, label: p.label, options: p.options, maxLength: p.maxLength }] } });
+    const r = await callApi('/api/autofill/draft', { method: 'POST', body: { jobId: S.job?.id, page: pagePayload(), questions: [{ id: p.id, label: p.label, options: p.options, maxLength: p.maxLength }] } });
     S.drafts[p.id] = r.drafts?.[0] || { answer: null, reason: 'No draft this time. Write it yourself.' };
   } catch (e) { S.drafts[p.id] = { answer: null, reason: e.message }; }
   S.busy = false; render();
@@ -170,7 +167,7 @@ async function draftMissing() {
   for (let i = 0; i < todo.length; i += 20) {
     const chunk = todo.slice(i, i + 20);
     try {
-      const r = await callApi('/api/autofill/draft', { method: 'POST', body: { jobId: S.job?.id, page: { title: S.page?.heading || S.page?.title, company: S.job?.company }, questions: chunk.map((p) => ({ id: dkey(p), label: p.label, options: p.options, maxLength: p.maxLength })) } });
+      const r = await callApi('/api/autofill/draft', { method: 'POST', body: { jobId: S.job?.id, page: pagePayload(), questions: chunk.map((p) => ({ id: dkey(p), label: p.label, options: p.options, maxLength: p.maxLength })) } });
       for (const d of r.drafts || []) {
         const p = chunk.find((x) => dkey(x) === d.id); if (!p) continue;
         if (d.answer) Object.assign(p, { status: 'yellow', value: d.answer, source: 'AI draft', aiDraft: true, reason: 'Assumed from your resume and profile. Check it before you apply.' });
@@ -243,43 +240,30 @@ function render() {
   show(...mods);
 }
 
-// ---------- which saved job: nothing is read, filled or drafted until the form is tied to one of the user's saved, credited jobs
+// ---------- no saved job owns this form: nothing is read, filled or drafted
 
 const buyCredits = () => SERVER_OPEN('/#/settings/billing');
 function gateView() {
-  const open = S.ctx.jobs.filter((x) => x.status === 'saved');
-  const ready = open.filter((x) => x.credit); const locked = open.filter((x) => !x.credit);
-  const lockedNote = locked.length > 0 && el('div', { class: 'note warn' }, `${locked.length} saved job${locked.length === 1 ? ' is' : 's are'} waiting for credits, so ${locked.length === 1 ? 'its form' : 'their forms'} can’t be filled yet. `, el('button', { class: 'link inline', onclick: buyCredits }, 'Buy credits'));
-  if (ready.length) {
-    return show(el('section', { class: 'mod' }, el('span', { class: 'tab' }, 'Which job?'),
-      el('p', {}, 'Pick the saved job this form is for. Rolemate fills forms only for jobs you have saved.'),
-      el('div', { class: 'picker' }, ready.slice(0, 8).map((x) => el('button', { onclick: () => chooseJob(x) }, el('b', {}, x.title || 'Untitled role'), el('span', {}, [x.company, x.fit != null ? `${x.fit}% fit` : ''].filter(Boolean).join(' · '))))),
-      el('p', { class: 'hint' }, 'Not in the list? Open the job’s posting, click Rolemate and choose “Capture this job”.')), lockedNote,
-      el('p', { class: 'never' }, 'Autofill is included with each saved job. It works only for jobs you have saved in Rolemate.'));
-  }
-  show(msg('stop', 'Save this job in Rolemate first', 'Rolemate fills in application forms only for jobs you have saved. Open the job’s posting, click Rolemate and choose “Capture this job”. That saves it, tailors your resume and unlocks this form.',
-    btn('I’ve saved it: check again', start, 'primary')), lockedNote, el('p', { class: 'never' }, 'Autofill is included with each saved job, so there is nothing to pay for beyond the job’s credit.'));
+  const locked = S.ctx.jobs.filter((x) => x.status === 'saved' && !x.credit);
+  const here = S.page?.heading || S.page?.title || 'This form';
+  show(msg('stop', 'Save this job in Rolemate first', `Rolemate fills in an application form only for a job you have saved, and “${here.slice(0, 80)}” doesn’t match any of your saved jobs. Open the job’s posting, click Rolemate and choose “Capture this job”. That saves it, tailors your resume and unlocks its form.`,
+    btn('I’ve saved it: check again', start, 'primary')),
+    locked.length > 0 && el('div', { class: 'note warn' }, `${locked.length} saved job${locked.length === 1 ? ' is' : 's are'} waiting for credits. `, el('button', { class: 'link inline', onclick: buyCredits }, 'Buy credits')),
+    el('p', { class: 'never' }, 'Autofill is included with each saved job and works only for that job’s own application form.'));
 }
 function lockedView(job) {
   show(msg('stop', 'This job needs a credit', `“${job.title || 'This job'}” is saved, but it hasn’t been unlocked. Autofill is included once a job has a credit.`, btn('Buy credits', buyCredits, 'primary'), btn('Check again', start)));
 }
 
-async function chooseJob(job) { S.job = job; S.pickedJob = true; await proceed(); }
-async function changeJob() {
-  S.job = null; S.plan = []; S.data = null; S.filled = false; S.pickedJob = false;
-  await inTab(null, () => window.__rolemateAF?.unmark()).catch(() => {});
-  gateView();
-}
-
-// A saved, credited job is chosen: get the fill data for it from the server, read the form and show the plan.
+// The form belongs to a saved, credited job: get the fill data for it from the server, read the form and show the plan.
 async function proceed() {
   show(el('section', { class: 'msg info' }, el('div', { class: 'tab' }, 'One moment'), el('h1', {}, 'Reading the form…')));
   try {
-    S.data = await callApi(`/api/autofill/jobs/${S.job.id}/data`);
+    S.data = await callApi(`/api/autofill/jobs/${S.job.id}/data?${pageQuery()}`);
     await scanPlan(); markAll(); render();
     // Opened by "Fill the form": fill straight away, then show what needs attention.
     if (S.wantFill) { S.wantFill = false; S.auto = true; passes = 0; await fillAll(); }
-  } catch (e) { if (e.status === 402) return lockedView(S.job); problem(e); }
+  } catch (e) { if (e.status === 402) return lockedView(S.job); if (e.status === 403) return gateView(); problem(e); }
 }
 
 async function rescan({ fill = false } = {}) {
@@ -311,15 +295,15 @@ let starting = null;
 const start = () => (starting ??= run().finally(() => { starting = null; }));
 async function run() {
   show(el('section', { class: 'msg info' }, el('div', { class: 'tab' }, 'One moment'), el('h1', {}, 'Reading the form…')));
-  Object.assign(S, { auto: false, ctx: null, data: null, wantFill: false, flash: '', forms: [], plan: [], job: null, pickedJob: false, filled: false, changed: false, notice: '', pause: null, busy: false, drafts: {}, applied: null });
+  Object.assign(S, { auto: false, ctx: null, data: null, wantFill: false, flash: '', forms: [], plan: [], job: null, filled: false, changed: false, notice: '', pause: null, busy: false, drafts: {}, applied: null });
   try {
     const tab = params.get('tab') ? await chrome.tabs.get(Number(params.get('tab'))) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
     if (!tab || !/^https?:/.test(tab.url || '')) return show(msg('info', 'Open an application form', 'Go to the job’s application form, then click the Rolemate icon and choose “Fill the form”.', btn('Check again', start, 'primary')));
     S.tabId = tab.id; S.url = tab.url;
-    S.ctx = await callApi(`/api/autofill/context?url=${encodeURIComponent(tab.url)}`);
-    if (!S.ctx.hasResume) return show(msg('stop', 'Upload your resume first', 'Rolemate builds your application details from your resume.', btn('Open Rolemate', () => SERVER_OPEN('/'), 'primary')));
     await detectForms();
     if (!S.forms.length) return show(msg('info', 'No application form here', 'Open the page with the form (the one with your name, email and a resume upload), then read it again.', btn('Read this page again', start, 'primary')), el('p', { class: 'never' }, 'Rolemate only reads a page after you click it. It does nothing in the background.'));
+    S.ctx = await callApi(`/api/autofill/context?${pageQuery()}`);
+    if (!S.ctx.hasResume) return show(msg('stop', 'Upload your resume first', 'Rolemate builds your application details from your resume.', btn('Open Rolemate', () => SERVER_OPEN('/'), 'primary')));
     S.wantFill = !!(await takeRequest(S.tabId)); // "Fill the form" was clicked
     S.job = pickJob();
     if (!S.job) return gateView();

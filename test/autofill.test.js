@@ -9,6 +9,8 @@ import { closeBrowser } from '../server/lib/render.js';
 const resumeTxt = readFileSync(new URL('../fixtures/sample-resume.txt', import.meta.url));
 const jdTxt = readFileSync(new URL('../fixtures/sample-jd.txt', import.meta.url), 'utf8');
 let server; let base; let token; let other; let db; let jobId;
+const JOB_URL = 'https://jobs.example/acme/123';
+const onPage = (url, title = '', heading = '', site = '') => new URLSearchParams({ url, title, heading, site }).toString();
 const call = async (path, { method = 'GET', body, tok = token } = {}) => {
   const res = await fetch(base + path, { method, headers: { ...(tok ? { Authorization: `Bearer ${tok}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, data: await res.json().catch(() => null) };
@@ -79,7 +81,9 @@ test('context lists the user\'s open jobs with their credit and tailored resume,
   jobId = cap.data.job.id;
   const { data } = await call('/api/autofill/context?url=' + encodeURIComponent('https://jobs.example/acme/123?utm_source=x'));
   assert.equal(data.jobs.length, 1);
-  assert.equal(data.jobs[0].sameUrl, true); assert.equal(data.jobs[0].credit, true);
+  assert.equal(data.jobs[0].sameUrl, true); assert.equal(data.jobs[0].credit, true); assert.equal(data.jobs[0].matches, true);
+  const elsewhere = (await call('/api/autofill/context?' + onPage('https://careers.globex.example/apply', 'Careers at Globex – Data Analyst'))).data.jobs[0];
+  assert.equal(elsewhere.matches, false, 'a form that is not this job\'s is not matched');
   assert.ok(data.jobs[0].resume?.id, 'the tailored resume is named so the user knows which file to attach');
   assert.ok(!('profile' in data) && !('bank' in data), 'the fill data is only given for a specific credited job');
   assert.equal((await call('/api/autofill/context', { tok: other })).data.jobs.length, 0);
@@ -88,10 +92,10 @@ test('context lists the user\'s open jobs with their credit and tailored resume,
 const lockedJob = () => Number(db.prepare("INSERT INTO jobs (user_id, title, company, jd_text, status) VALUES ((SELECT id FROM users WHERE email = 'rahul@example.com'), 'Locked role', 'NoCredit Inc', 'x', 'saved')").run().lastInsertRowid);
 
 test('the fill data is given only for the user\'s own saved job that has a credit', async () => {
-  const ok = await call(`/api/autofill/jobs/${jobId}/data`);
+  const ok = await call(`/api/autofill/jobs/${jobId}/data?${onPage(JOB_URL)}`);
   assert.equal(ok.status, 200);
   assert.equal(ok.data.profile.personal.first_name, 'RAHUL'); assert.ok(Array.isArray(ok.data.bank));
-  assert.equal((await call(`/api/autofill/jobs/${jobId}/data`, { tok: other })).status, 404, 'someone else\'s job');
+  assert.equal((await call(`/api/autofill/jobs/${jobId}/data?${onPage(JOB_URL)}`, { tok: other })).status, 404, 'someone else\'s job');
   assert.equal((await call('/api/autofill/jobs/99999/data')).status, 404);
   // A job saved without a credit (the free credits ran out when it was captured) stays locked.
   const id = lockedJob();
@@ -115,7 +119,7 @@ test('drafting needs a saved, credited job; without one nothing is drafted and n
 });
 
 test('drafting is off without a key: nothing is made up', async () => {
-  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: [{ id: 'q1', label: 'Why do you want to join us?' }] } });
+  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { jobId, page: { url: JOB_URL }, questions: [{ id: 'q1', label: 'Why do you want to join us?' }] } });
   assert.equal(data.drafts[0].answer, null);
 });
 
@@ -127,7 +131,7 @@ test('drafts answer every question, assuming what the resume does not say; only 
     { id: 'c', answer: 'Maybe' },
     { id: 'd', answer: 'Yes' }] }) }] }; };
   setClientForTests({ beta: { messages: { create: reply } }, messages: { create: reply } });
-  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: [
+  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { jobId, page: { url: JOB_URL }, questions: [
     { id: 'a', label: 'Tell us about your experience' }, { id: 'b', label: 'What is your expected salary?' },
     { id: 'c', label: 'Open to relocation?', options: ['Yes', 'No'] }, { id: 'd', label: 'Comfortable with on-call?', options: ['Yes', 'No'] }] } });
   const by = Object.fromEntries(data.drafts.map((d) => [d.id, d]));
@@ -141,9 +145,32 @@ test('drafts answer every question, assuming what the resume does not say; only 
 
 test('drafting has a fair-use limit per job', async () => {
   db.prepare('INSERT INTO job_autofill (job_id, drafts) VALUES (?, 40) ON CONFLICT(job_id) DO UPDATE SET drafts = 40').run(jobId);
-  const r = await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: [{ id: 'q', label: 'Anything else?' }] } });
+  const r = await call('/api/autofill/draft', { method: 'POST', body: { jobId, page: { url: JOB_URL }, questions: [{ id: 'q', label: 'Anything else?' }] } });
   assert.equal(r.status, 429); assert.match(r.data.error, /limit/i);
   db.prepare('UPDATE job_autofill SET drafts = 0 WHERE job_id = ?').run(jobId);
+});
+
+test('a saved job unlocks ITS OWN form only: another company, or another role at the same company, is refused', async () => {
+  const data = (url, title, heading = '', site = '') => call(`/api/autofill/jobs/${jobId}/data?${onPage(url, title, heading, site)}`);
+  // The exact case that must not work: a saved, credited job used to fill an unrelated form.
+  const other1 = await data('https://careers.globex.example/apply', 'Careers at Globex – Data Analyst');
+  assert.equal(other1.status, 403); assert.match(other1.data.error, /doesn.t look like the application/);
+  assert.equal((await data('https://boards.example/acme-payments/jobs/9', 'Frontend Engineer at Acme Payments')).status, 403, 'same company, different role');
+  assert.equal((await data('https://boards.example/globex/jobs/9', 'Senior Backend Engineer at Globex')).status, 403, 'same role, different company');
+  assert.equal((await data('https://boards.example/x', '')).status, 403, 'no information about the page');
+  // Its own form, on other hiring sites: same company and role, level words ignored.
+  assert.equal((await data('https://jobs.lever.co/acme/1111/apply', 'Acme Payments - Backend Engineer')).status, 200);
+  assert.equal((await data('https://jobs.ashbyhq.com/acme/2222/application', 'Senior Backend Engineer @ Acme')).status, 200);
+  // A job unlocks at most 3 form pages; a page it already unlocked keeps working.
+  assert.equal((await data('https://boards.example/acme-payments/jobs/7', 'Job Application for Senior Backend Engineer at Acme Payments')).status, 403, 'the 4th form page');
+  assert.equal((await data('https://jobs.lever.co/acme/1111/apply', 'Acme Payments - Backend Engineer')).status, 200, 'same form again');
+  // Drafting follows the same rule: only for a form page the job has unlocked.
+  setClientForTests(fakeAi([{ id: 'q', answer: 'Because it fits.' }]));
+  const q = [{ id: 'q', label: 'Why do you want to join us?' }];
+  assert.equal((await call('/api/autofill/draft', { method: 'POST', body: { jobId, page: { url: 'https://careers.globex.example/apply' }, questions: q } })).status, 403);
+  assert.equal((await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: q } })).status, 403, 'no page given');
+  assert.equal((await call('/api/autofill/draft', { method: 'POST', body: { jobId, page: { url: 'https://jobs.lever.co/acme/1111/apply' }, questions: q } })).status, 200);
+  setClientForTests(null);
 });
 
 test('marking a job applied sets a follow-up 7 days out, once', async () => {

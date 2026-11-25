@@ -83,6 +83,34 @@ export function missingDetails(p) {
 export const qkey = (q) => String(q || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 300);
 export const sanitizeAnswer = (b = {}) => ({ question: s(b.question, 300), tags: s(b.tags, 80), answer: s(b.answer, 3000) });
 
+// ---- is this form the saved job's own application form?
+// A saved job unlocks autofill for ITS form only. The page must be the saved posting itself, or name the same company and the same
+// role (level words like "Senior" are ignored). A different role at the same company, or a different company, does not match.
+
+const LEVEL = new Set(['senior', 'sr', 'junior', 'jr', 'lead', 'staff', 'principal', 'associate', 'intern', 'trainee', 'i', 'ii', 'iii', 'iv', 'l1', 'l2', 'l3']);
+const COMPANY_FILLER = new Set(['technologies', 'technology', 'tech', 'pvt', 'private', 'ltd', 'limited', 'inc', 'llc', 'corp', 'corporation', 'solutions', 'systems', 'services', 'labs', 'india', 'group', 'software', 'the', 'and', 'co']);
+const wordsOf = (t) => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').match(/[a-z0-9]+/g) || [];
+
+export function formMatchesJob(job, page, sameUrl = false) {
+  if (sameUrl) return true;
+  let host = ''; let path = '';
+  try { const u = new URL(page.url); host = u.hostname; path = u.pathname; } catch { /* no usable address */ }
+  const hay = [page.title, page.heading, page.site, host, path].map((x) => String(x || '').slice(0, 400)).join(' ');
+  const set = new Set(wordsOf(hay));
+  const joined = wordsOf(hay).join('');
+  const title = wordsOf(job.title).filter((t) => !LEVEL.has(t) && t.length >= 2);
+  const score = title.length ? title.filter((t) => set.has(t)).length / title.length : 0;
+  const co = wordsOf(job.company).filter((t) => t.length >= 3 && !COMPANY_FILLER.has(t));
+  const companyHere = co.some((t) => set.has(t) || joined.includes(t));
+  if (!co.length) return title.length >= 2 && score === 1; // no company on the saved job: the role must match in full
+  return companyHere && score >= 0.8;
+}
+
+// Identifies a form page: host plus the first three path segments (a multi-step form keeps these).
+export function formKey(url) {
+  try { const u = new URL(url); return `${u.hostname.toLowerCase()}/${u.pathname.split('/').filter(Boolean).slice(0, 3).join('/').toLowerCase()}`; } catch { return ''; }
+}
+
 // ---- drafts for free-text questions
 
 const pickOption = (answer, options) => {

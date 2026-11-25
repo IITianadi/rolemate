@@ -77,6 +77,11 @@ export function openDb(path = 'data/tailorkit.db') {
     CREATE INDEX IF NOT EXISTS question_log_user ON question_log(user_id, created_at);
     -- Drafting calls per job: autofill is included with a job's credit, within a fair-use limit.
     CREATE TABLE IF NOT EXISTS job_autofill (job_id INTEGER PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE, drafts INTEGER NOT NULL DEFAULT 0);
+    -- The application forms a saved job has unlocked (host + path of the page). A job unlocks its own form, not any form.
+    CREATE TABLE IF NOT EXISTS job_forms (
+      job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, form_key TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (job_id, form_key)
+    );
   `);
   // Added after the first release: a stable identity for "the same job" (see capture).
   if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'google_id')) db.exec("ALTER TABLE users ADD COLUMN google_id TEXT NOT NULL DEFAULT ''");

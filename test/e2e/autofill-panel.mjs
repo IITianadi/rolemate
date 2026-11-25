@@ -147,14 +147,29 @@ try {
     await p2.waitForSelector('text=No application form here', { timeout: 15000 });
   });
 
-  await step('a form for an unrecognised company asks which job it is for', async () => {
-    const id = (await api('/api/jobs', { token })).data.jobs[0].id;
-    await api(`/api/jobs/${id}`, { method: 'PATCH', token, body: { status: 'saved' } });
-    const { panel: p3 } = await openPanel(`${SITE}/apply-generic.html`);
-    await p3.waitForSelector('text=Which job?', { timeout: 15000 });
-    await p3.click('.picker button');
-    await p3.waitForSelector('text=Applying to');
-    assert.match(await text(p3), /Your tailored resume/);
+  await step('a saved, credited job cannot be used to fill a different form (nothing filled, nothing drafted, no picker)', async () => {
+    const url = `${SITE}/apply-generic.html?bypass`; // a Globex form; the only saved job is Acme Payments
+    const ft = await ctx.newPage(); await ft.goto(url);
+    const id = await probe.evaluate(async (u) => (await chrome.tabs.query({})).find((t) => t.url === u).id, url);
+    await probe.evaluate((tabId) => chrome.storage.local.set({ autofillRequest: { tabId, at: Date.now() } }), id); // even a one-click request
+    const pn = await ctx.newPage(); await pn.goto(`chrome-extension://${extId}/sidepanel.html?tab=${id}`);
+    await pn.waitForSelector('text=Save this job in Rolemate first', { timeout: 15000 });
+    await pn.waitForTimeout(1500);
+    assert.equal(await pn.locator('.picker').count(), 0, 'there is no list of saved jobs to choose from');
+    assert.equal(await pn.locator('button', { hasText: /^Fill / }).count(), 0, 'there is no Fill button');
+    assert.deepEqual(await ft.evaluate(() => [document.getElementById('fn').value, document.getElementById('em').value, document.querySelectorAll('[data-rolemate]').length]), ['', '', 0]);
+    const jobId = (await api('/api/jobs', { token })).data.jobs[0].id;
+    const q = new URLSearchParams({ url, title: 'Careers at Globex – Apply', heading: 'Data Analyst' }).toString();
+    assert.equal((await api(`/api/autofill/jobs/${jobId}/data?${q}`, { token })).status, 403, 'the server refuses, whatever the extension does');
+    assert.equal((await api('/api/autofill/draft', { method: 'POST', token, body: { jobId, page: { url }, questions: [{ id: 'q', label: 'Why us?' }] } })).status, 403);
+    await ft.close();
+  });
+
+  await step('another hiring site\'s form for the same job is filled (Ashby page naming the same role and company)', async () => {
+    const { formTab: ft, panel: pn } = await openPanel(`${SITE}/apply-ashby.html`);
+    await pn.waitForSelector('text=questions on this form', { timeout: 15000 });
+    assert.match(await text(pn), /Applying to/); assert.match(await text(pn), /Senior Backend Engineer/);
+    await ft.close();
   });
 
   await step('first Fill with AI on: drafts answers from the resume into the form, never asks about sensitive questions', async () => {

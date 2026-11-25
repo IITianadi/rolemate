@@ -22,7 +22,7 @@ import { findCompanyLogo } from './lib/logo.js';
 import { createMailer } from './lib/mail.js';
 import { welcomeEmail, guideEmail, resetEmail } from './lib/mail-templates.js';
 import { verifyGoogleToken } from './lib/google.js';
-import { buildApplyProfile, missingDetails, sanitizeApply, sanitizeAnswer, qkey, draftAnswers } from './lib/autofill.js';
+import { buildApplyProfile, missingDetails, sanitizeApply, sanitizeAnswer, qkey, draftAnswers, formMatchesJob, formKey } from './lib/autofill.js';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -650,32 +650,45 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     return { p, profile: buildApplyProfile({ resume: p?.resume, facts: p?.facts || {}, apply: p?.apply || {}, accountEmail: user.email, confirmedSkills: p?.confirmedSkills || [] }) };
   };
 
-  // Autofill is part of a job's credit: it works only for a job the user saved and that has a credit (capturing a job
-  // is what spends it). The server enforces this, so the extension cannot skip it: the fill data and AI drafting are only
-  // handed out for such a job.
+  // Autofill is part of a job's credit and works for THAT job's own application form: the user must have saved the job, the
+  // job must have a credit (capturing it is what spends one), and the form's page must be that job's (same posting, or the
+  // same company and role). The server decides all three, so the extension cannot skip them: the fill data and AI drafting
+  // are only handed out for a matching, credited job. Each job unlocks at most 3 form pages (a multi-step form keeps its key).
   const AUTOFILL_DRAFTS_PER_JOB = 40;
+  const FORMS_PER_JOB = 3;
+  const pageOf = (q) => ({ url: String(q?.url || '').slice(0, 600), title: String(q?.title || '').slice(0, 300), heading: String(q?.heading || '').slice(0, 300), site: String(q?.site || '').slice(0, 100) });
   const creditedJob = (user, id) => {
     const r = jobRow(user.id, id);
     if (!hasCredit(user, r.id)) throw httpError(402, 'Autofill is included once a job has a credit. Buy credits to unlock this job.');
     return r;
   };
+  const sameUrl = (r, page) => { const p = canonicalUrl(page.url); return !!p && canonicalUrl(r.url) === p; };
 
-  // The user's open jobs, newest first, because the form is usually on a different site from the page the job was captured on.
-  // No profile data here: that is only given for a specific, credited job (see below).
+  // The user's open jobs, newest first, each flagged with whether THIS page is its form. No profile data here: that is
+  // only given for a specific, matching, credited job (see below).
   app.get('/api/autofill/context', auth, (req, res) => {
     const rows = db.prepare("SELECT * FROM jobs WHERE user_id = ? AND status IN ('saved','applied') ORDER BY (status = 'saved') DESC, id DESC LIMIT 25").all(req.user.id);
-    const pageUrl = canonicalUrl(String(req.query.url || ''));
+    const page = pageOf(req.query);
     const jobs = rows.map((r) => {
       const latest = db.prepare('SELECT id, label, downloaded_at FROM resumes WHERE job_id = ? ORDER BY id DESC LIMIT 1').get(r.id);
+      const same = sameUrl(r, page);
       return { id: r.id, title: r.title, company: r.company, location: r.location, status: r.status, url: r.url, logo: r.logo || '', fit: j(r.match, {}).score ?? null, credit: hasCredit(req.user, r.id),
-        sameUrl: !!pageUrl && canonicalUrl(r.url) === pageUrl, resume: latest ? { id: latest.id, label: latest.label, downloaded: !!latest.downloaded_at } : null };
+        sameUrl: same, matches: formMatchesJob(r, page, same), resume: latest ? { id: latest.id, label: latest.label, downloaded: !!latest.downloaded_at } : null };
     });
     res.json({ hasResume: !!getProfile(req.user.id), jobs, aiEnabled: aiEnabled() });
   });
 
-  // The details and saved answers the extension fills the form with, for one saved job that has a credit.
+  // The details and saved answers the extension fills the form with, for one saved job that has a credit and owns this form.
   app.get('/api/autofill/jobs/:id/data', auth, (req, res) => {
     const r = creditedJob(req.user, req.params.id);
+    const page = pageOf(req.query);
+    if (!formMatchesJob(r, page, sameUrl(r, page))) throw httpError(403, `This form doesn’t look like the application for “${r.title || 'this job'}”. Autofill works for the form of a job you have saved.`);
+    const key = formKey(page.url);
+    const known = db.prepare('SELECT 1 FROM job_forms WHERE job_id = ? AND form_key = ?').get(r.id, key);
+    if (!known) {
+      if (db.prepare('SELECT COUNT(*) c FROM job_forms WHERE job_id = ?').get(r.id).c >= FORMS_PER_JOB) throw httpError(403, 'This job has already been used for other forms. Save the job for this form to fill it.');
+      db.prepare('INSERT INTO job_forms (job_id, form_key) VALUES (?, ?)').run(r.id, key);
+    }
     const { profile } = applyProfileFor(req.user);
     res.json({ job: { id: r.id, title: r.title, company: r.company }, profile, missing: missingDetails(profile), bank: bankRows(req.user.id) });
   });
@@ -732,6 +745,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   app.post('/api/autofill/draft', auth, draftLimit, async (req, res) => {
     if (!req.body?.jobId) throw httpError(400, 'Save the job first: autofill works for jobs saved in Rolemate.');
     const job = creditedJob(req.user, req.body.jobId);
+    if (!db.prepare('SELECT 1 FROM job_forms WHERE job_id = ? AND form_key = ?').get(job.id, formKey(String(req.body?.page?.url || '')))) throw httpError(403, 'This form hasn’t been unlocked for this job. Open Fill the form on the job’s own application page.');
     const qs = (Array.isArray(req.body?.questions) ? req.body.questions : []).slice(0, 20)
       .map((q, i) => ({ id: String(q?.id ?? i).slice(0, 40), label: String(q?.label || '').slice(0, 400), options: (Array.isArray(q?.options) ? q.options : []).slice(0, 40).map((o) => String(o).slice(0, 120)), maxLength: Math.min(Number(q?.maxLength) || 0, 4000) || 0 }))
       .filter((q) => q.label);
