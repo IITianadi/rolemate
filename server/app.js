@@ -713,7 +713,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
 
   // Drafts for free-text questions with no saved answer. Nothing is filled until the user approves it in the panel.
   app.post('/api/autofill/draft', auth, draftLimit, async (req, res) => {
-    const qs = (Array.isArray(req.body?.questions) ? req.body.questions : []).slice(0, 12)
+    const qs = (Array.isArray(req.body?.questions) ? req.body.questions : []).slice(0, 20)
       .map((q, i) => ({ id: String(q?.id ?? i).slice(0, 40), label: String(q?.label || '').slice(0, 400), options: (Array.isArray(q?.options) ? q.options : []).slice(0, 40).map((o) => String(o).slice(0, 120)), maxLength: Math.min(Number(q?.maxLength) || 0, 4000) || 0 }))
       .filter((q) => q.label);
     if (!qs.length) return res.json({ drafts: [] });

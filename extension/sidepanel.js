@@ -108,14 +108,16 @@ function fieldCard(p) {
   const status = done ? 'green' : p.status;
   const q = el('div', { class: 'q' }, el('button', { title: 'Show on the page', onclick: () => focusField(p) }, p.label), !p.required && p.status === 'red' && el('span', { class: 'opt' }, 'optional'));
   const card = el('div', { class: `fld ${status}` }, q);
-  if (done || p.status === 'green' || p.status === 'yellow') card.append(el('div', { class: 'v' }, p.value), el('div', { class: 'why' }, done ? p.doneNote || 'Filled.' : S.filled ? (p.failed ? 'Couldn’t fill this one. Do it on the page.' : p.reason) : `${STATE_WORD[p.status]}. ${p.reason}`));
+  const reviewing = p.aiDraft && S.filled && !done && !p.failed; // the editor below shows the draft, so don't print it twice
+  if (done || p.status === 'green' || p.status === 'yellow') card.append(!reviewing && el('div', { class: 'v' }, p.value), el('div', { class: 'why' }, done ? p.doneNote || 'Filled.' : S.filled ? (p.failed ? 'Couldn’t fill this one. Do it on the page.' : p.reason) : `${STATE_WORD[p.status]}. ${p.reason}`));
   else card.append(el('div', { class: 'why' }, p.reason));
   if (!done && !p.failed && p.status === 'red' && (p.canAsk || p.sensitive)) card.append(answerBox(p));
+  if (!done && p.aiDraft && S.filled && !p.failed) card.append(answerBox(p, true));
   return card;
 }
 
 // The user's own answer for a field Rolemate can't fill. Sensitive questions are answered here and not saved.
-function answerBox(p) {
+function answerBox(p, review = false) {
   const opts = p.options || [];
   const long = p.kind === 'textarea' || p.needsDraft;
   let input;
@@ -123,15 +125,16 @@ function answerBox(p) {
   else if (long) input = el('textarea', { 'aria-label': p.label, maxlength: p.maxLength || 4000 });
   else input = el('input', { 'aria-label': p.label, type: p.kind === 'number' ? 'number' : 'text' });
   const draft = S.drafts[p.id];
-  if (draft?.answer) input.value = draft.answer;
+  if (review) input.value = p.value; else if (draft?.answer) input.value = draft.answer;
   const box = el('div', {}, input, draft && !draft.answer && el('div', { class: 'why' }, draft.reason));
   const use = el('button', { class: 'btn primary small', onclick: async () => {
     const v = String(input.value || '').trim(); if (!v) return;
     use.disabled = true;
     await applyAnswer(p, v, !p.sensitive);
-  } }, p.sensitive ? 'Fill' : 'Fill and save for next time');
+  } }, review ? 'Looks right: keep for next time' : p.sensitive ? 'Fill' : 'Fill and save for next time');
   const row = el('div', { class: 'row' }, use);
-  if (p.needsDraft && S.ctx.aiEnabled && !draft?.answer) row.append(el('button', { class: 'btn small', onclick: () => draftFor(p) }, S.drafts[p.id] ? 'Try drafting again' : 'Draft with Rolemate'));
+  if (review) row.append(el('button', { class: 'btn small', onclick: async () => { const v = String(input.value || '').trim(); if (v) await applyAnswer(p, v, false); } }, 'Update on form only'));
+  if (!review && p.needsDraft && S.ctx.aiEnabled && !draft?.answer) row.append(el('button', { class: 'btn small', onclick: () => draftFor(p) }, S.drafts[p.id] ? 'Try drafting again' : 'Draft with Rolemate'));
   box.append(row);
   if (draft?.answer) box.append(el('div', { class: 'why' }, 'A draft from your resume and this job. Edit it, then fill it only if it is true.'));
   return box;
@@ -156,8 +159,30 @@ async function applyAnswer(p, value, save) {
   markAll(); render();
 }
 
+// Questions Rolemate can't answer from the profile but the resume may support. Sensitive, consent and unsupported fields are never drafted.
+const draftable = (p) => p.status === 'red' && !p.sensitive && !p.failed && p.canAsk && !['checkbox', 'unsupported', 'file'].includes(p.kind);
+const dkey = (p) => `${p.frameId}:${p.id}`;
+
+// First time or not: draft an answer for each of those from the resume, profile and job, so the form is filled as far as the facts allow.
+async function draftMissing() {
+  if (!S.ctx.aiEnabled) return;
+  const todo = S.plan.filter(draftable);
+  for (let i = 0; i < todo.length; i += 20) {
+    const chunk = todo.slice(i, i + 20);
+    try {
+      const r = await callApi('/api/autofill/draft', { method: 'POST', body: { jobId: S.job?.id, page: { title: S.page?.heading || S.page?.title, company: S.job?.company }, questions: chunk.map((p) => ({ id: dkey(p), label: p.label, options: p.options, maxLength: p.maxLength })) } });
+      for (const d of r.drafts || []) {
+        const p = chunk.find((x) => dkey(x) === d.id); if (!p) continue;
+        if (d.answer) Object.assign(p, { status: 'yellow', value: d.answer, source: 'AI draft', aiDraft: true, reason: 'Drafted from your resume and this job. Read it before you apply.' });
+        else S.drafts[p.id] = d;
+      }
+    } catch (e) { S.notice = e.message; break; }
+  }
+}
+
 async function fillAll() {
   S.busy = true; render();
+  await draftMissing();
   const items = S.plan.filter((p) => (p.status === 'green' || p.status === 'yellow') && p.value);
   const res = await fillItems(items).catch(() => []);
   const ok = new Map(res.map((r) => [r.id, r.ok]));
@@ -165,7 +190,7 @@ async function fillAll() {
   S.filled = true; S.busy = false;
   markAll(); render();
   // Questions seen and what happened to each. Labels only, never the answers.
-  callApi('/api/autofill/log', { method: 'POST', body: { jobId: S.job?.id, host: S.page?.host, questions: S.plan.map((p) => ({ label: p.label, kind: p.kind, outcome: p.failed ? 'check' : p.status === 'green' ? 'filled' : p.status === 'yellow' ? 'check' : p.status === 'attach' ? 'attach' : p.status === 'kept' ? 'kept' : 'asked' })) } }).catch(() => {});
+  callApi('/api/autofill/log', { method: 'POST', body: { jobId: S.job?.id, host: S.page?.host, questions: S.plan.map((p) => ({ label: p.label, kind: p.kind, outcome: p.failed ? 'check' : p.status === 'green' ? 'filled' : p.aiDraft ? 'drafted' : p.status === 'yellow' ? 'check' : p.status === 'attach' ? 'attach' : p.status === 'kept' ? 'kept' : 'asked' })) } }).catch(() => {});
 }
 
 async function markApplied() {
@@ -178,6 +203,7 @@ async function markApplied() {
 function render() {
   const sum = summarize(S.plan.map((p) => (p.done ? { ...p, status: 'green' } : p)));
   const fillable = S.plan.filter((p) => (p.status === 'green' || p.status === 'yellow') && p.value && !p.done).length;
+  const toDraft = S.ctx.aiEnabled && !S.filled ? S.plan.filter(draftable).length : 0;
   const mods = [];
   if (S.notice) mods.push(el('div', { class: 'err' }, S.notice));
   if (S.pause) mods.push(el('div', { class: 'note warn' }, S.pause === 'captcha' ? 'This page has a captcha. Solve it yourself. Rolemate never does.' : 'This page asks for a code. Enter it yourself. Rolemate never reads or fills codes.'));
@@ -187,8 +213,8 @@ function render() {
   const head = el('section', { class: 'mod' }, el('span', { class: 'tab' }, S.filled ? 'Review' : 'Form found'),
     el('h1', {}, S.filled ? 'Check it, then press Apply yourself' : `${S.plan.length} question${S.plan.length === 1 ? '' : 's'} on this form`),
     el('div', { class: 'sumbar' }, sum.green > 0 && el('span', { class: 'pill green' }, `${sum.green} ${S.filled ? 'filled' : 'ready'}`), sum.yellow > 0 && el('span', { class: 'pill yellow' }, `${sum.yellow} to check`), sum.red > 0 && el('span', { class: 'pill red' }, `${sum.red} need you`), sum.attach > 0 && el('span', { class: 'pill attach' }, `${sum.attach} to attach`)),
-    !S.filled && el('p', { class: 'muted' }, fillable ? 'Nothing is typed until you press Fill. Questions Rolemate can’t answer are left for you.' : 'Rolemate has nothing it can fill here yet. You can answer the questions below.'),
-    !S.filled && fillable > 0 && el('button', { class: 'btn primary', disabled: S.busy, onclick: fillAll }, S.busy ? 'Filling…' : `Fill ${fillable} field${fillable === 1 ? '' : 's'}`),
+    !S.filled && el('p', { class: 'muted' }, fillable || toDraft ? `Nothing is typed until you press Fill.${toDraft ? ' Rolemate will also draft answers to the other questions from your resume and this job. They are marked yellow so you can read them before you apply.' : ' Questions Rolemate can’t answer are left for you.'}` : 'Rolemate has nothing it can fill here yet. You can answer the questions below.'),
+    !S.filled && (fillable > 0 || toDraft > 0) && el('button', { class: 'btn primary', disabled: S.busy, onclick: fillAll }, S.busy ? (toDraft ? 'Drafting and filling…' : 'Filling…') : toDraft ? `Fill ${fillable} and draft ${toDraft} answer${toDraft === 1 ? '' : 's'}` : `Fill ${fillable} field${fillable === 1 ? '' : 's'}`),
     S.filled && el('button', { class: 'btn', onclick: () => rescan() }, 'Read the form again (next step)'));
   mods.push(head);
 

@@ -105,7 +105,8 @@ export async function draftAnswers({ questions, resume, profile, bank = [], job 
   const approved = bank.slice(0, 12).map((b) => `Q: ${b.question}\nA: ${b.answer}`).join('\n\n');
   const system = [
     'You write draft answers to job application questions for a candidate. The candidate will read each draft and approve it before anything is filled in.',
-    'Use only the candidate\'s resume, their approved answers and the job. Write in the first person, plain and specific, in the candidate\'s voice, with no filler.',
+    'Use only the candidate\'s resume, profile, approved answers and the job. Write in the first person, plain and specific, in the candidate\'s voice, with no filler.',
+    'Answer every question the sources support, even if it is the first time: pick the option the resume supports for yes/no and multiple-choice questions, and write a short tailored answer for open questions.',
     'Never invent experience, employers, dates, numbers, salary, credentials or skills. If the sources do not support an answer, return null for it.',
     'If a question lists options, the answer must be exactly one of the options, or null.',
     'Respect maxLength when given. Short questions get one or two sentences; "why do you want to work here" style questions get at most four.',
@@ -114,6 +115,7 @@ export async function draftAnswers({ questions, resume, profile, bank = [], job 
   ].join('\n');
   const user = [
     fence('candidate_resume', resumeText),
+    fence('candidate_profile', JSON.stringify({ employment: profile?.employment, location: profile?.location, education: profile?.education, work_history: profile?.work_history, skills: profile?.skills })),
     approved && fence('approved_answers', approved),
     fence('job', `Title: ${job?.title || page.title || ''}\nCompany: ${job?.company || page.company || ''}\n${jd}`),
     fence('questions', JSON.stringify(questions.map((q) => ({ id: q.id, question: q.label, options: q.options?.length ? q.options : undefined, maxLength: q.maxLength || undefined })))),

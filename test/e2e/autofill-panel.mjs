@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { findExtensionBrowser } from './browser.mjs';
 import { createApp } from '../../server/app.js';
 import { closeBrowser } from '../../server/lib/render.js';
+import { setClientForTests } from '../../server/lib/ai.js';
 
 delete process.env.ANTHROPIC_API_KEY;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -156,6 +157,34 @@ try {
     assert.match(await text(p3), /Your tailored resume/);
   });
 
+  await step('first Fill with AI on: drafts answers from the resume into the form, never asks about sensitive questions', async () => {
+    const seen = [];
+    const reply = async (p) => {
+      const qs = JSON.parse(p.messages[0].content.match(/<questions>\n([\s\S]*?)\n<\/questions>/)[1]);
+      seen.push(...qs.map((q) => q.question));
+      const answers = qs.map((q) => ({ id: q.id, answer: /why do you want/i.test(q.question) ? 'I build reliable backend systems in Python and Django, which is what this role needs.' : /favourite database/i.test(q.question) ? 'PostgreSQL' : null }));
+      return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ answers }) }] };
+    };
+    setClientForTests({ beta: { messages: { create: reply } }, messages: { create: reply } });
+    try {
+      const { formTab: ft, panel: pn } = await openPanel(`${SITE}/apply-lever.html?second`);
+      await pn.waitForSelector('text=questions on this form', { timeout: 15000 });
+      assert.match(await text(pn), /will also draft answers/);
+      await pn.click('button:has-text("and draft")');
+      await pn.waitForSelector('text=Check it, then press Apply yourself', { timeout: 20000 });
+      const v = await ft.evaluate(() => ({ why: document.querySelector('[name="cards[3]"]').value, db: document.querySelector('[name="cards[4]"]').value, gender: document.querySelector('[name="eeo[gender]"]').value, files: document.querySelector('[name=resume]').files.length, clicked: !!window.__submitClicked }));
+      assert.match(v.why, /Python and Django/); assert.equal(v.db, 'PostgreSQL');
+      assert.equal(v.gender, '', 'sensitive questions are not drafted'); assert.deepEqual([v.files, v.clicked], [0, false]);
+      assert.ok(seen.some((q) => /Why do you want/.test(q)) && !seen.some((q) => /gender|disabilit|veteran|race|privacy policy|Resume/i.test(q)), seen.join(' | '));
+      const t = await text(pn);
+      assert.match(t, /Check these/); assert.match(t, /Drafted from your resume and this job/);
+      await shot(pn, 'panel-3-ai-drafts');
+      await pn.locator('.fld', { hasText: 'Why do you want' }).locator('button:has-text("Looks right")').click();
+      await pn.waitForSelector('text=Filled and saved');
+      assert.ok((await api('/api/autofill/answers', { token })).data.answers.some((a) => /Why do you want/.test(a.question)), 'saved only once the user confirms it');
+    } finally { setClientForTests(null); }
+  });
+
   await step('dashboard: Application details and Saved answers are editable', async () => {
     const dash = await ctx.newPage(); const errs = []; dash.on('pageerror', (e) => errs.push(e.message));
     await dash.goto(DASH); await dash.evaluate((t) => localStorage.setItem('tk_token', t), token);
@@ -169,8 +198,10 @@ try {
     const p = (await api('/api/autofill/profile', { token })).data;
     assert.equal(p.apply.postalCode, '122001'); assert.equal(p.apply.eeo.autoFill, false);
     const saved = dash.locator('.card', { hasText: 'Saved answers' }).first();
-    assert.match(await saved.locator('input[aria-label=Question]').first().inputValue(), /Favourite database engine/);
-    assert.equal(await saved.locator('textarea[aria-label=Answer]').first().inputValue(), 'PostgreSQL');
+    const qs = await saved.locator('input[aria-label=Question]').evaluateAll((els) => els.map((e) => e.value));
+    assert.ok(qs.some((q) => /Favourite database engine/.test(q)) && qs.some((q) => /Why do you want/.test(q)), qs.join(' | '));
+    const row = saved.locator('.card.soft', { has: dash.locator('input[aria-label=Question]') }).filter({ has: dash.locator('textarea') });
+    assert.ok((await row.locator('textarea').evaluateAll((els) => els.map((e) => e.value))).includes('PostgreSQL'));
     assert.deepEqual(errs, []);
     await dash.waitForTimeout(1200);
     if (SHOTS) await dash.locator('#application-details').screenshot({ path: join(SHOTS, 'dashboard-application-details.png') });
