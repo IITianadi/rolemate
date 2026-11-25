@@ -100,7 +100,8 @@ function jobModule() {
     !S.pickedJob && S.ctx.jobs.filter((x) => x.status === 'saved').length > 1 && el('button', { class: 'link', onclick: () => { S.job = null; render(); } }, 'Wrong job? Choose another'));
 }
 
-const GROUPS = (filled) => [['green', filled ? 'Filled from your profile' : 'Ready to fill from your profile'], ['yellow', 'Check these'], ['red', 'Needs you'], ['attach', 'You attach'], ['kept', 'Already filled by you']];
+// Attention first: what Rolemate couldn't do, then what it guessed or drafted, then the file you attach. Filled fields come last.
+const GROUPS = (filled) => [['red', 'Needs you'], ['yellow', 'Check these'], ['attach', 'You attach'], ['green', filled ? 'Filled from your profile' : 'Ready to fill from your profile'], ['kept', 'Already filled by you']];
 const STATE_WORD = { green: 'Will fill', yellow: 'Will fill, check it' };
 
 function fieldCard(p) {
@@ -207,20 +208,23 @@ function render() {
   const mods = [];
   if (S.notice) mods.push(el('div', { class: 'err' }, S.notice));
   if (S.pause) mods.push(el('div', { class: 'note warn' }, S.pause === 'captcha' ? 'This page has a captcha. Solve it yourself. Rolemate never does.' : 'This page asks for a code. Enter it yourself. Rolemate never reads or fills codes.'));
-  if (S.changed) mods.push(el('div', { class: 'note' }, 'The form changed (maybe the next step). ', el('button', { class: 'link inline', onclick: () => rescan() }, 'Read it again')));
+  if (S.changed && !S.auto) mods.push(el('div', { class: 'note' }, 'The form changed (maybe the next step). ', el('button', { class: 'link inline', onclick: () => rescan() }, 'Read it again')));
   mods.push(jobModule());
 
   const head = el('section', { class: 'mod' }, el('span', { class: 'tab' }, S.filled ? 'Review' : 'Form found'),
     el('h1', {}, S.filled ? 'Check it, then press Apply yourself' : `${S.plan.length} question${S.plan.length === 1 ? '' : 's'} on this form`),
     el('div', { class: 'sumbar' }, sum.green > 0 && el('span', { class: 'pill green' }, `${sum.green} ${S.filled ? 'filled' : 'ready'}`), sum.yellow > 0 && el('span', { class: 'pill yellow' }, `${sum.yellow} to check`), sum.red > 0 && el('span', { class: 'pill red' }, `${sum.red} need you`), sum.attach > 0 && el('span', { class: 'pill attach' }, `${sum.attach} to attach`)),
-    !S.filled && el('p', { class: 'muted' }, fillable || toDraft ? `Nothing is typed until you press Fill.${toDraft ? ' Rolemate will also draft answers to the other questions from your resume and this job. They are marked yellow so you can read them before you apply.' : ' Questions Rolemate can’t answer are left for you.'}` : 'Rolemate has nothing it can fill here yet. You can answer the questions below.'),
-    !S.filled && (fillable > 0 || toDraft > 0) && el('button', { class: 'btn primary', disabled: S.busy, onclick: fillAll }, S.busy ? (toDraft ? 'Drafting and filling…' : 'Filling…') : toDraft ? `Fill ${fillable} and draft ${toDraft} answer${toDraft === 1 ? '' : 's'}` : `Fill ${fillable} field${fillable === 1 ? '' : 's'}`),
+    S.busy && !S.filled && el('div', { class: 'note' }, S.auto ? 'Filling the whole form and drafting answers…' : 'Working…'),
+    S.filled && sum.red + sum.yellow + sum.attach > 0 && el('p', { class: 'muted' }, `${sum.red + sum.yellow + sum.attach} thing${sum.red + sum.yellow + sum.attach === 1 ? '' : 's'} need your attention. Start with the red ones; each is outlined on the page.`),
+    !S.filled && !S.busy && el('p', { class: 'muted' }, fillable || toDraft ? `Nothing is typed until you press Fill.${toDraft ? ' Rolemate will also draft answers to the other questions from your resume and this job. They are marked yellow so you can read them before you apply.' : ' Questions Rolemate can’t answer are left for you.'}` : 'Rolemate has nothing it can fill here yet. You can answer the questions below.'),
+    !S.filled && !S.busy && (fillable > 0 || toDraft > 0) && el('button', { class: 'btn primary', disabled: S.busy, onclick: fillAll }, S.busy ? (toDraft ? 'Drafting and filling…' : 'Filling…') : toDraft ? `Fill ${fillable} and draft ${toDraft} answer${toDraft === 1 ? '' : 's'}` : `Fill ${fillable} field${fillable === 1 ? '' : 's'}`),
     S.filled && el('button', { class: 'btn', onclick: () => rescan() }, 'Read the form again (next step)'));
   mods.push(head);
 
   for (const [st, title] of GROUPS(S.filled)) {
     const rows = S.plan.filter((p) => (p.done ? 'green' : p.status) === st).sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0));
-    if (rows.length) mods.push(el('div', { class: `group ${st}` }, el('h2', {}, el('i'), `${title} (${rows.length})`), rows.map(fieldCard)));
+    if (!rows.length) continue;
+    mods.push(el('div', { class: `group ${st}` }, el('h2', {}, el('i'), `${title} (${rows.length})`), rows.map(fieldCard)));
   }
 
   if (S.ctx.missing?.length) mods.push(el('div', { class: 'note' }, 'Add details once and every form will use them: ', el('button', { class: 'link inline', onclick: () => SERVER_OPEN('/#/profile') }, 'Application details in your dashboard')));
@@ -233,16 +237,36 @@ function render() {
   show(...mods);
 }
 
-async function rescan() {
+async function rescan({ fill = false } = {}) {
   S.busy = true; render();
   try { await readForms(); S.filled = false; S.drafts = {}; markAll(); }
   catch (e) { return problem(e); }
-  S.busy = false; render();
+  S.busy = false;
+  if (fill) { await fillAll(); return; }
+  render();
 }
 
-async function start() {
+// One click fills the whole form. The page changes when the user moves to the next step (they press Next, never Rolemate):
+// new fields are read and filled the same way, a few passes at most.
+let passes = 0;
+async function continueFilling() {
+  if (!S.auto || S.busy || passes >= 5) return;
+  passes++;
+  await rescan({ fill: true });
+}
+
+async function takeRequest(tabId) {
+  const { autofillRequest: r } = await chrome.storage.local.get('autofillRequest');
+  if (!r || r.tabId !== tabId || Date.now() - r.at > 60000) return null; // only a request for this panel's own tab
+  await chrome.storage.local.remove('autofillRequest');
+  return r;
+}
+
+let starting = null;
+const start = () => (starting ??= run().finally(() => { starting = null; }));
+async function run() {
   show(el('section', { class: 'msg info' }, el('div', { class: 'tab' }, 'One moment'), el('h1', {}, 'Reading the form…')));
-  Object.assign(S, { ctx: null, forms: [], plan: [], job: null, pickedJob: false, filled: false, changed: false, notice: '', pause: null, busy: false, drafts: {}, applied: null });
+  Object.assign(S, { auto: false, ctx: null, forms: [], plan: [], job: null, pickedJob: false, filled: false, changed: false, notice: '', pause: null, busy: false, drafts: {}, applied: null });
   try {
     const tab = params.get('tab') ? await chrome.tabs.get(Number(params.get('tab'))) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
     if (!tab || !/^https?:/.test(tab.url || '')) return show(msg('info', 'Open an application form', 'Go to the job’s application form, then click the Rolemate icon and choose “Fill the form”.', btn('Check again', start, 'primary')));
@@ -252,11 +276,24 @@ async function start() {
     await readForms();
     if (!S.forms.length) return show(msg('info', 'No application form here', 'Open the page with the form (the one with your name, email and a resume upload), then read it again.', btn('Read this page again', start, 'primary')), el('p', { class: 'never' }, 'Rolemate only reads a page after you click it. It does nothing in the background.'));
     S.job = pickJob(); markAll(); render();
+    // Opened by "Fill the form": fill straight away, then show what needs attention.
+    const req = await takeRequest(S.tabId);
+    if (req) { S.auto = true; passes = 0; await fillAll(); }
   } catch (e) { problem(e); }
 }
 
 // The form changes as the user moves through steps: offer to read it again, never do it silently.
-chrome.runtime.onMessage.addListener((m, sender) => { if (m?.type === 'rm:changed' && sender.tab?.id === S.tabId && S.ctx && !S.busy) { S.changed = true; render(); } });
+chrome.runtime.onMessage.addListener((m, sender) => {
+  if (m?.type !== 'rm:changed' || sender.tab?.id !== S.tabId || !S.ctx || S.busy) return;
+  if (S.auto) continueFilling(); else { S.changed = true; render(); }
+});
+// "Fill the form" clicked while the panel is already open.
+chrome.storage.onChanged.addListener(async (c, area) => {
+  if (area !== 'local' || !c.autofillRequest?.newValue) return;
+  if (starting) await starting; // a run that was already starting may have taken it
+  const r = (await chrome.storage.local.get('autofillRequest')).autofillRequest;
+  if (r && r.tabId === S.tabId) start();
+});
 chrome.tabs.onActivated.addListener(() => { if (!params.get('tab')) start(); });
 chrome.tabs.onUpdated.addListener((id, info) => { if (id === S.tabId && info.status === 'loading' && info.url && !params.get('tab')) start(); });
 window.__rolemateStart = start; // for tests

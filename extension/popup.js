@@ -237,8 +237,13 @@ async function formOnPage(tab) {
 const fillModule = (tab, site) => el('section', { class: 'ready mod' },
   el('span', { class: 'tab' }, 'Application form'),
   el('h1', {}, 'Fill it with your Rolemate details'),
-  el('p', {}, 'Rolemate types in your details and the answers you’ve saved. You attach your tailored resume and press Apply yourself.'),
-  el('button', { class: 'btn primary', onclick: () => { chrome.sidePanel.open({ tabId: tab.id }).then(() => window.close(), () => {}); } }, 'Fill the form'),
+  el('p', {}, 'Rolemate fills the whole form in one go from your profile and resume, then shows what needs your attention. You attach your tailored resume and press Apply yourself.'),
+  el('button', { class: 'btn primary', onclick: () => {
+    // open() must run straight from the click. The request tells the panel to fill as soon as it has read the form.
+    const opened = chrome.sidePanel.open({ tabId: tab.id });
+    chrome.storage.local.set({ autofillRequest: { tabId: tab.id, at: Date.now() } });
+    opened.then(() => window.close(), () => {});
+  } }, 'Fill the form'),
   site && el('button', { class: 'link', onclick: () => capture(tab, site) }, 'Capture this job instead'),
   el('p', { class: 'hint' }, 'It never uploads files and never presses Apply.'));
 

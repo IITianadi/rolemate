@@ -185,6 +185,33 @@ try {
     } finally { setClientForTests(null); }
   });
 
+  await step('one click: "Fill the form" fills the whole form, attention items come first, and the next step is filled too', async () => {
+    const reply = async (p) => {
+      const qs = JSON.parse(p.messages[0].content.match(/<questions>\n([\s\S]*?)\n<\/questions>/)[1]);
+      const answers = qs.map((q) => ({ id: q.id, answer: /why do you want/i.test(q.question) ? 'Because the role matches my Python and Django work.' : null }));
+      return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ answers }) }] };
+    };
+    setClientForTests({ beta: { messages: { create: reply } }, messages: { create: reply } });
+    try {
+      const url = `${SITE}/apply-lever.html?oneclick`;
+      const ft = await ctx.newPage(); await ft.goto(url);
+      const id = await probe.evaluate(async (u) => (await chrome.tabs.query({})).find((t) => t.url === u).id, url);
+      await probe.evaluate((tabId) => chrome.storage.local.set({ autofillRequest: { tabId, at: Date.now() } }), id); // what the popup's button sets
+      const pn = await ctx.newPage(); await pn.goto(`chrome-extension://${extId}/sidepanel.html?tab=${id}`);
+      await pn.waitForSelector('text=Check it, then press Apply yourself', { timeout: 25000 }).catch(async (e) => { throw new Error(`${e.message.split('\n')[0]}\nPANEL SAYS: ${(await text(pn)).slice(0, 600)}`); }); // nobody pressed Fill
+      const v = await ft.evaluate(() => ({ name: document.querySelector('[name=name]').value, why: document.querySelector('[name="cards[3]"]').value, gender: document.querySelector('[name="eeo[gender]"]').value, files: document.querySelector('[name=resume]').files.length, clicked: !!window.__submitClicked, submitted: !!window.__submitted }));
+      assert.equal(v.name, 'RAHUL SHARMA'); assert.match(v.why, /Python and Django/); assert.deepEqual([v.gender, v.files, v.clicked, v.submitted], ['', 0, false, false]);
+      const heads = await pn.locator('.group h2').allInnerTexts();
+      assert.match(heads[0], /^Needs you/); assert.ok(heads.findIndex((h) => /Check these/.test(h)) < heads.findIndex((h) => /^Filled from your profile/.test(h)), heads.join(' | '));
+      assert.match(await text(pn), /need your attention/);
+      await pn.setViewportSize({ width: 420, height: 900 }); await shot(pn, 'panel-4-one-click');
+      // The user presses the site's Next; new fields appear and are filled without another click.
+      await ft.evaluate(() => { const d = document.createElement('div'); d.className = 'application-question'; d.innerHTML = '<label><div class="application-label">Expected CTC</div><input name="late" type="text"></label>'; document.getElementById('application-form').append(d); });
+      await ft.waitForFunction(() => document.querySelector('[name=late]').value === '18 LPA', null, { timeout: 15000 });
+      assert.equal(await ft.evaluate(() => !!window.__submitClicked), false);
+    } finally { setClientForTests(null); }
+  });
+
   await step('dashboard: Application details and Saved answers are editable', async () => {
     const dash = await ctx.newPage(); const errs = []; dash.on('pageerror', (e) => errs.push(e.message));
     await dash.goto(DASH); await dash.evaluate((t) => localStorage.setItem('tk_token', t), token);
