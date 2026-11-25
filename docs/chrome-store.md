@@ -19,7 +19,7 @@ Open a job on LinkedIn, Naukri, Indeed or one of 50 supported job sites and comp
 - Match score and the skills you are missing
 - Tailored resume that keeps your layout and never adds experience you do not have
 - Interview prep and questions you can ask about the job
-- Fills in the application form: open the company's form, click Rolemate, and your details are typed in. Each question is marked green (filled), yellow (check it) or red (needs you). Sensitive questions are always yours to answer.
+- Fills in the application form: open the company's form, click Rolemate, and your details are typed in. One click fills the whole form from your profile and resume, and the panel shows only what needs your attention. Works for jobs you have saved in Rolemate. Sensitive questions are always yours to answer.
 Rolemate never uploads files, solves captchas or presses Apply. You attach your tailored resume and press apply yourself.
 Requires a free Rolemate account at app.rolemate.in.
 

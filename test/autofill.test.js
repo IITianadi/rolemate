@@ -4,12 +4,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createApp } from '../server/app.js';
 import { setClientForTests } from '../server/lib/ai.js';
-import { numbersSupported } from '../server/lib/autofill.js';
 import { closeBrowser } from '../server/lib/render.js';
 
 const resumeTxt = readFileSync(new URL('../fixtures/sample-resume.txt', import.meta.url));
 const jdTxt = readFileSync(new URL('../fixtures/sample-jd.txt', import.meta.url), 'utf8');
-let server; let base; let token; let other;
+let server; let base; let token; let other; let db; let jobId;
 const call = async (path, { method = 'GET', body, tok = token } = {}) => {
   const res = await fetch(base + path, { method, headers: { ...(tok ? { Authorization: `Bearer ${tok}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, data: await res.json().catch(() => null) };
@@ -21,6 +20,7 @@ const fakeAi = (answers) => ({ beta: { messages: { create: async () => ({ stop_r
 before(async () => {
   delete process.env.ANTHROPIC_API_KEY;
   const app = createApp({ dbPath: ':memory:', freeLimit: 5 });
+  db = app.locals.db;
   await new Promise((r) => { server = app.listen(0, r); });
   base = `http://127.0.0.1:${server.address().port}`;
   token = await signup('rahul@example.com'); other = await signup('someone@example.com');
@@ -33,7 +33,7 @@ test('requires sign-in', async () => {
 });
 
 test('profile is built from the resume, and lists what only the user can supply', async () => {
-  const { data } = await call('/api/autofill/context');
+  const { data } = await call('/api/autofill/profile');
   assert.equal(data.hasResume, true);
   const p = data.profile;
   assert.equal(p.personal.first_name, 'RAHUL'); assert.equal(p.personal.last_name, 'SHARMA');
@@ -48,7 +48,7 @@ test('profile is built from the resume, and lists what only the user can supply'
 test('user-confirmed details replace gaps; EEO stays opt-in', async () => {
   const put = await call('/api/autofill/profile', { method: 'PUT', body: { apply: { city: 'Pune', state: 'Maharashtra', country: 'India', phone: '9876543210', requiresSponsorship: 'No', eeo: { gender: 'Male' } }, facts: { noticePeriod: '30 days', expectedCtc: '18 LPA' } } });
   assert.equal(put.status, 200);
-  const { data } = await call('/api/autofill/context');
+  const { data } = await call('/api/autofill/profile');
   assert.equal(data.profile.employment.notice_period, '30 days');
   assert.equal(data.profile.location.current_city, 'Pune');
   assert.equal(data.profile.work_authorization.requires_sponsorship, 'No');
@@ -73,48 +73,82 @@ test('saved answers: add, dedupe by question, edit, delete, and never visible to
   assert.equal((await call(`/api/autofill/answers/${id}`, { method: 'DELETE' })).data.answers.length, 0);
 });
 
-test('context offers the user\'s open jobs with their tailored resume, and flags the same page', async () => {
+test('context lists the user\'s open jobs with their credit and tailored resume, and gives away no profile data', async () => {
   const cap = await call('/api/capture', { method: 'POST', body: { url: 'https://jobs.example/acme/123', title: 'Senior Backend Engineer', text: jdTxt } });
   assert.equal(cap.status, 201);
+  jobId = cap.data.job.id;
   const { data } = await call('/api/autofill/context?url=' + encodeURIComponent('https://jobs.example/acme/123?utm_source=x'));
   assert.equal(data.jobs.length, 1);
-  assert.equal(data.jobs[0].sameUrl, true);
+  assert.equal(data.jobs[0].sameUrl, true); assert.equal(data.jobs[0].credit, true);
   assert.ok(data.jobs[0].resume?.id, 'the tailored resume is named so the user knows which file to attach');
+  assert.ok(!('profile' in data) && !('bank' in data), 'the fill data is only given for a specific credited job');
   assert.equal((await call('/api/autofill/context', { tok: other })).data.jobs.length, 0);
 });
 
-test('drafting is off without a key: nothing is made up', async () => {
-  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { questions: [{ id: 'q1', label: 'Why do you want to join us?' }] } });
-  assert.equal(data.drafts[0].answer, null);
+const lockedJob = () => Number(db.prepare("INSERT INTO jobs (user_id, title, company, jd_text, status) VALUES ((SELECT id FROM users WHERE email = 'rahul@example.com'), 'Locked role', 'NoCredit Inc', 'x', 'saved')").run().lastInsertRowid);
+
+test('the fill data is given only for the user\'s own saved job that has a credit', async () => {
+  const ok = await call(`/api/autofill/jobs/${jobId}/data`);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.profile.personal.first_name, 'RAHUL'); assert.ok(Array.isArray(ok.data.bank));
+  assert.equal((await call(`/api/autofill/jobs/${jobId}/data`, { tok: other })).status, 404, 'someone else\'s job');
+  assert.equal((await call('/api/autofill/jobs/99999/data')).status, 404);
+  // A job saved without a credit (the free credits ran out when it was captured) stays locked.
+  const id = lockedJob();
+  const locked = await call(`/api/autofill/jobs/${id}/data`);
+  assert.equal(locked.status, 402); assert.match(locked.data.error, /credit/i);
+  assert.equal((await call('/api/autofill/context')).data.jobs.find((x) => x.title === 'Locked role').credit, false);
+  db.prepare('DELETE FROM jobs WHERE id = ?').run(id);
 });
 
-test('drafts: kept when supported, dropped when they invent a number or pick a non-option', async () => {
-  setClientForTests(fakeAi([
-    { id: 'a', answer: 'I have 4 years of backend experience in fintech.' },
-    { id: 'b', answer: 'I have 11 years of experience.' },
-    { id: 'c', answer: 'Maybe' },
-    { id: 'd', answer: null },
-  ]));
-  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { questions: [
-    { id: 'a', label: 'Tell us about your experience' }, { id: 'b', label: 'Summarise your background' },
-    { id: 'c', label: 'Open to relocation?', options: ['Yes', 'No'] }, { id: 'd', label: 'Anything else?' }] } });
-  const by = Object.fromEntries(data.drafts.map((d) => [d.id, d]));
-  assert.match(by.a.answer, /4 years/);
-  assert.equal(by.b.answer, null); assert.match(by.b.reason, /number/);
-  assert.equal(by.c.answer, null);
-  assert.equal(by.d.answer, null);
+test('drafting needs a saved, credited job; without one nothing is drafted and no AI call is made', async () => {
+  let calls = 0;
+  setClientForTests({ beta: { messages: { create: async () => { calls++; return { stop_reason: 'end_turn', content: [{ type: 'text', text: '{"answers":[]}' }] }; } } }, messages: { create: async () => { calls++; throw new Error('unused'); } } });
+  const q = [{ id: 'q1', label: 'Why do you want to join us?' }];
+  assert.equal((await call('/api/autofill/draft', { method: 'POST', body: { questions: q } })).status, 400, 'no job');
+  assert.equal((await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: q }, tok: other })).status, 404, 'not their job');
+  const id = lockedJob();
+  assert.equal((await call('/api/autofill/draft', { method: 'POST', body: { jobId: id, questions: q } })).status, 402, 'no credit');
+  assert.equal(calls, 0, 'rejected before any tokens were spent');
+  db.prepare('DELETE FROM jobs WHERE id = ?').run(id);
   setClientForTests(null);
 });
 
-test('numbersSupported only allows numbers found in the sources', () => {
-  assert.ok(numbersSupported('Cut latency by 38%', 'Reduced API latency by 38% with caching'));
-  assert.ok(!numbersSupported('Cut latency by 45%', 'Reduced API latency by 38% with caching'));
-  assert.ok(numbersSupported('I led a team', 'anything'));
+test('drafting is off without a key: nothing is made up', async () => {
+  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: [{ id: 'q1', label: 'Why do you want to join us?' }] } });
+  assert.equal(data.drafts[0].answer, null);
+});
+
+test('drafts answer every question, assuming what the resume does not say; only a non-option answer is dropped', async () => {
+  let seen = '';
+  const reply = async (p) => { seen = p.system + p.messages[0].content; return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ answers: [
+    { id: 'a', answer: 'I have 4 years of backend experience in fintech.' },
+    { id: 'b', answer: 'I expect around 22 LPA.' },
+    { id: 'c', answer: 'Maybe' },
+    { id: 'd', answer: 'Yes' }] }) }] }; };
+  setClientForTests({ beta: { messages: { create: reply } }, messages: { create: reply } });
+  const { data } = await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: [
+    { id: 'a', label: 'Tell us about your experience' }, { id: 'b', label: 'What is your expected salary?' },
+    { id: 'c', label: 'Open to relocation?', options: ['Yes', 'No'] }, { id: 'd', label: 'Comfortable with on-call?', options: ['Yes', 'No'] }] } });
+  const by = Object.fromEntries(data.drafts.map((d) => [d.id, d]));
+  assert.match(by.a.answer, /4 years/);
+  assert.match(by.b.answer, /22 LPA/, 'an assumption is filled, not dropped');
+  assert.equal(by.c.answer, null, 'a field with options cannot take an answer that is not one of them');
+  assert.equal(by.d.answer, 'Yes');
+  assert.match(seen, /most reasonable assumption/);
+  setClientForTests(null);
+});
+
+test('drafting has a fair-use limit per job', async () => {
+  db.prepare('INSERT INTO job_autofill (job_id, drafts) VALUES (?, 40) ON CONFLICT(job_id) DO UPDATE SET drafts = 40').run(jobId);
+  const r = await call('/api/autofill/draft', { method: 'POST', body: { jobId, questions: [{ id: 'q', label: 'Anything else?' }] } });
+  assert.equal(r.status, 429); assert.match(r.data.error, /limit/i);
+  db.prepare('UPDATE job_autofill SET drafts = 0 WHERE job_id = ?').run(jobId);
 });
 
 test('marking a job applied sets a follow-up 7 days out, once', async () => {
   const jobs = (await call('/api/jobs')).data.jobs;
-  const id = jobs[0].id;
+  const id = jobId;
   assert.equal(jobs[0].followUpDue, null);
   const r = await call(`/api/jobs/${id}`, { method: 'PATCH', body: { status: 'applied' } });
   const due = new Date(r.data.job.followUpDue).getTime();

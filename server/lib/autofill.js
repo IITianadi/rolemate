@@ -1,9 +1,9 @@
 // Autofill support: the application profile the extension fills forms from, the user's saved answers,
 // and drafts for free-text questions.
 //
-// Rules this file enforces (the extension enforces the rest: it never submits and never uploads a file):
-// - Facts come from the user's resume and from details the user typed. Nothing is invented.
-// - A draft may only use the resume, saved answers and the job. A number that appears nowhere in those is dropped.
+// Rules (the extension enforces the rest: it never submits and never uploads a file; sensitive questions are never drafted):
+// - The profile is built only from the user's resume and the details they typed.
+// - Drafts are built from the resume, profile and job; where those are silent the model makes the most reasonable assumption.
 // - Page text (the job description, question labels) is data. It is fenced, and the model only returns strings.
 
 import { askJSON, aiEnabled, fence, DATA_ONLY_RULE } from './ai.js';
@@ -85,33 +85,23 @@ export const sanitizeAnswer = (b = {}) => ({ question: s(b.question, 300), tags:
 
 // ---- drafts for free-text questions
 
-const numbersIn = (t) => new Set((String(t).match(/\d[\d,.]*%?/g) || []).map((x) => x.replace(/[,.]+$/, '').replace(/,/g, '')));
-
-// True when every number in the answer already appears in the sources. Years, salaries and counts are never made up.
-export function numbersSupported(answer, sources) {
-  const have = numbersIn(sources);
-  return [...numbersIn(answer)].every((n) => n.length < 2 || have.has(n));
-}
-
 const pickOption = (answer, options) => {
   const a = String(answer || '').trim().toLowerCase();
   return options.find((o) => String(o).trim().toLowerCase() === a) || null;
 };
 
 export async function draftAnswers({ questions, resume, profile, bank = [], job = null, page = {} }) {
-  if (!aiEnabled()) return questions.map((q) => ({ id: q.id, answer: null, reason: 'Drafting is off right now. Write this one yourself.' }));
+  if (!aiEnabled()) return questions.map((q) => ({ id: q.id, answer: null, reason: 'Drafting is off right now. Answer this one yourself.' }));
   const resumeText = resume ? resumePlainText(resume).slice(0, 6000) : '';
   const jd = job?.jd_text ? String(job.jd_text).slice(0, 5000) : '';
   const approved = bank.slice(0, 12).map((b) => `Q: ${b.question}\nA: ${b.answer}`).join('\n\n');
   const system = [
-    'You write draft answers to job application questions for a candidate. The candidate will read each draft and approve it before anything is filled in.',
-    'Use only the candidate\'s resume, profile, approved answers and the job. Write in the first person, plain and specific, in the candidate\'s voice, with no filler.',
-    'Answer every question the sources support, even if it is the first time: pick the option the resume supports for yes/no and multiple-choice questions, and write a short tailored answer for open questions.',
-    'Never invent experience, employers, dates, numbers, salary, credentials or skills. If the sources do not support an answer, return null for it.',
-    'If a question lists options, the answer must be exactly one of the options, or null.',
-    'Respect maxLength when given. Short questions get one or two sentences; "why do you want to work here" style questions get at most four.',
+    'You fill in a job application for a candidate. Their resume and profile are the source of truth. The candidate reviews the form afterwards.',
+    'Answer EVERY question, first time or not, in the first person, plain and specific, in the candidate\'s voice, with no filler. Never leave one blank.',
+    'When the resume or profile does not state the answer, make the most reasonable assumption a candidate with this background would make: infer from their roles, seniority, skills, education, location and the job. Keep every answer consistent with the resume.',
+    'If a question lists options, answer with exactly one of the options (the closest one). Respect maxLength when given. Short questions get a word, a number or one or two sentences; open questions like "why do you want to work here" get at most four sentences, tailored to the job.',
     DATA_ONLY_RULE,
-    'Return {"answers":[{"id":"<id>","answer":"<text or null>"}]} with one entry per question.',
+    'Return {"answers":[{"id":"<id>","answer":"<text>"}]} with one entry per question.',
   ].join('\n');
   const user = [
     fence('candidate_resume', resumeText),
@@ -120,15 +110,14 @@ export async function draftAnswers({ questions, resume, profile, bank = [], job 
     fence('job', `Title: ${job?.title || page.title || ''}\nCompany: ${job?.company || page.company || ''}\n${jd}`),
     fence('questions', JSON.stringify(questions.map((q) => ({ id: q.id, question: q.label, options: q.options?.length ? q.options : undefined, maxLength: q.maxLength || undefined })))),
   ].filter(Boolean).join('\n\n');
-  const r = await askJSON(system, user, { maxTokens: 2500, effort: 'low' });
+  const r = await askJSON(system, user, { maxTokens: 3000, effort: 'low' });
   const byId = new Map((Array.isArray(r?.answers) ? r.answers : []).map((a) => [String(a?.id), a?.answer]));
-  const sources = [resumeText, approved, jd, JSON.stringify(profile || {})].join('\n');
   return questions.map((q) => {
     let a = byId.get(String(q.id));
-    if (typeof a !== 'string' || !a.trim() || /^null$/i.test(a.trim())) return { id: q.id, answer: null, reason: 'Not enough in your resume to answer this. Write it yourself.' };
-    a = a.trim().slice(0, q.maxLength || 1500);
+    if (typeof a !== 'string' && typeof a !== 'number') return { id: q.id, answer: null, reason: 'No answer came back for this one. Answer it yourself.' };
+    a = String(a).trim().slice(0, q.maxLength || 1500);
+    if (!a || /^null$/i.test(a)) return { id: q.id, answer: null, reason: 'No answer came back for this one. Answer it yourself.' };
     if (q.options?.length) { const o = pickOption(a, q.options); if (!o) return { id: q.id, answer: null, reason: 'No option clearly matches. Choose one yourself.' }; a = o; }
-    if (!numbersSupported(a, sources)) return { id: q.id, answer: null, reason: 'The draft used a number that is not in your resume, so it was dropped. Write this one yourself.' };
     return { id: q.id, answer: a };
   });
 }

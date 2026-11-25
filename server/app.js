@@ -650,18 +650,34 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     return { p, profile: buildApplyProfile({ resume: p?.resume, facts: p?.facts || {}, apply: p?.apply || {}, accountEmail: user.email, confirmedSkills: p?.confirmedSkills || [] }) };
   };
 
-  // Everything the side panel needs for the form in the active tab. `candidates` are the user's open (not yet applied) jobs,
-  // newest first, because the form is usually on a different site from the page the job was captured on.
+  // Autofill is part of a job's credit: it works only for a job the user saved and that has a credit (capturing a job
+  // is what spends it). The server enforces this, so the extension cannot skip it: the fill data and AI drafting are only
+  // handed out for such a job.
+  const AUTOFILL_DRAFTS_PER_JOB = 40;
+  const creditedJob = (user, id) => {
+    const r = jobRow(user.id, id);
+    if (!hasCredit(user, r.id)) throw httpError(402, 'Autofill is included once a job has a credit. Buy credits to unlock this job.');
+    return r;
+  };
+
+  // The user's open jobs, newest first, because the form is usually on a different site from the page the job was captured on.
+  // No profile data here: that is only given for a specific, credited job (see below).
   app.get('/api/autofill/context', auth, (req, res) => {
-    const { p, profile } = applyProfileFor(req.user);
     const rows = db.prepare("SELECT * FROM jobs WHERE user_id = ? AND status IN ('saved','applied') ORDER BY (status = 'saved') DESC, id DESC LIMIT 25").all(req.user.id);
     const pageUrl = canonicalUrl(String(req.query.url || ''));
     const jobs = rows.map((r) => {
       const latest = db.prepare('SELECT id, label, downloaded_at FROM resumes WHERE job_id = ? ORDER BY id DESC LIMIT 1').get(r.id);
-      return { id: r.id, title: r.title, company: r.company, location: r.location, status: r.status, url: r.url, logo: r.logo || '', fit: j(r.match, {}).score ?? null,
+      return { id: r.id, title: r.title, company: r.company, location: r.location, status: r.status, url: r.url, logo: r.logo || '', fit: j(r.match, {}).score ?? null, credit: hasCredit(req.user, r.id),
         sameUrl: !!pageUrl && canonicalUrl(r.url) === pageUrl, resume: latest ? { id: latest.id, label: latest.label, downloaded: !!latest.downloaded_at } : null };
     });
-    res.json({ hasResume: !!p, profile, missing: missingDetails(profile), bank: bankRows(req.user.id), jobs, aiEnabled: aiEnabled() });
+    res.json({ hasResume: !!getProfile(req.user.id), jobs, aiEnabled: aiEnabled() });
+  });
+
+  // The details and saved answers the extension fills the form with, for one saved job that has a credit.
+  app.get('/api/autofill/jobs/:id/data', auth, (req, res) => {
+    const r = creditedJob(req.user, req.params.id);
+    const { profile } = applyProfileFor(req.user);
+    res.json({ job: { id: r.id, title: r.title, company: r.company }, profile, missing: missingDetails(profile), bank: bankRows(req.user.id) });
   });
 
   app.get('/api/autofill/profile', auth, (req, res) => {
@@ -711,14 +727,19 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     res.json({ answers: bankRows(req.user.id) });
   });
 
-  // Drafts for free-text questions with no saved answer. Nothing is filled until the user approves it in the panel.
+  // Answers for the questions the profile can't answer, drafted from the resume, profile and job in one call. Needs a saved job
+  // with a credit; each job has a fair-use limit on drafting calls.
   app.post('/api/autofill/draft', auth, draftLimit, async (req, res) => {
+    if (!req.body?.jobId) throw httpError(400, 'Save the job first: autofill works for jobs saved in Rolemate.');
+    const job = creditedJob(req.user, req.body.jobId);
     const qs = (Array.isArray(req.body?.questions) ? req.body.questions : []).slice(0, 20)
       .map((q, i) => ({ id: String(q?.id ?? i).slice(0, 40), label: String(q?.label || '').slice(0, 400), options: (Array.isArray(q?.options) ? q.options : []).slice(0, 40).map((o) => String(o).slice(0, 120)), maxLength: Math.min(Number(q?.maxLength) || 0, 4000) || 0 }))
       .filter((q) => q.label);
     if (!qs.length) return res.json({ drafts: [] });
+    const used = db.prepare('SELECT drafts FROM job_autofill WHERE job_id = ?').get(job.id)?.drafts || 0;
+    if (used >= AUTOFILL_DRAFTS_PER_JOB) throw httpError(429, 'You have used the drafting limit for this job. You can still fill the form from your profile.');
+    db.prepare('INSERT INTO job_autofill (job_id, drafts) VALUES (?, 1) ON CONFLICT(job_id) DO UPDATE SET drafts = drafts + 1').run(job.id);
     const { p, profile } = applyProfileFor(req.user);
-    const job = req.body?.jobId ? jobRow(req.user.id, req.body.jobId) : null;
     const page = { title: String(req.body?.page?.title || '').slice(0, 200), company: String(req.body?.page?.company || '').slice(0, 120) };
     res.json({ drafts: await draftAnswers({ questions: qs, resume: p?.resume, profile, bank: bankRows(req.user.id), job, page }) });
   });

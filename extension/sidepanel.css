@@ -20,3 +20,6 @@ main { padding: 18px 16px 24px; }
 .note.warn { border-left-color: var(--red); background: var(--red-bg); color: var(--red-ink); }
 .picker { display: grid; gap: 6px; margin-top: 8px; } .picker button { text-align: left; border: 1px solid var(--line-strong); background: #fff; padding: 8px 10px; cursor: pointer; font: inherit; } .picker button:hover { border-color: var(--ink); background: var(--sunken); } .picker b { display: block; font-weight: 900; font-size: 14.5px; } .picker span { font-size: 13.5px; color: var(--muted); }
 .never { font-size: 13.5px; color: var(--muted); margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.group { margin-top: 14px; border: 1px solid var(--line); padding: 10px 12px; }
+details.group > summary { cursor: pointer; font-weight: 900; font-size: 14.5px; color: var(--ink2); }
+details.group[open] > summary { margin-bottom: 8px; }

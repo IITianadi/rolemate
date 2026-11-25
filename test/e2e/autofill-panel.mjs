@@ -85,12 +85,12 @@ try {
 
   await step('nothing is typed until the user presses Fill', async () => {
     assert.equal(await formTab.evaluate(() => document.querySelector('[name=email]').value), '');
-    assert.match(await text(panel), /Nothing is typed until you press Fill/);
+    assert.match(await text(panel), /Rolemate fills what your profile knows/);
   });
 
   await step('Fill types the known details, keeps what the user typed, and leaves the rest', async () => {
     await panel.click('button:has-text("Fill ")');
-    await panel.waitForSelector('text=Check it, then press Apply yourself');
+    await panel.waitForSelector('text=press Apply yourself');
     const v = await formTab.evaluate(() => ({ name: document.querySelector('[name=name]').value, email: document.querySelector('[name=email]').value, phone: document.querySelector('[name=phone]').value, org: document.querySelector('[name=org]').value, notice: document.querySelector('[name="cards[2]"]').value, reloc: document.querySelector('[name="cards[1]"]:checked')?.value, gender: document.querySelector('[name="eeo[gender]"]').value, files: document.querySelector('[name=resume]').files.length, marks: document.querySelectorAll('[data-rolemate]').length }));
     assert.equal(v.name, 'RAHUL SHARMA'); assert.equal(v.email, 'rahul.sharma@example.com'); assert.equal(v.phone, '+919876543210');
     assert.equal(v.org, 'My own startup'); assert.equal(v.notice, '2 months'); assert.equal(v.gender, ''); assert.equal(v.files, 0);
@@ -114,7 +114,7 @@ try {
     const card = panel.locator('.fld', { hasText: 'Gender' }).first();
     await card.locator('select').selectOption('Male');
     await card.locator('button:has-text("Fill")').click();
-    await panel.waitForFunction(() => /Filled\./.test(document.body.innerText));
+    await panel.waitForFunction(() => /Filled: Gender/.test(document.body.innerText));
     assert.equal(await formTab.evaluate(() => document.querySelector('[name="eeo[gender]"]').value), 'Male');
     const saved = (await api('/api/autofill/answers', { token })).data.answers;
     assert.ok(!saved.some((a) => /gender/i.test(a.question)), 'sensitive answers are not saved');
@@ -169,15 +169,15 @@ try {
     try {
       const { formTab: ft, panel: pn } = await openPanel(`${SITE}/apply-lever.html?second`);
       await pn.waitForSelector('text=questions on this form', { timeout: 15000 });
-      assert.match(await text(pn), /will also draft answers/);
+      assert.match(await text(pn), /drafts the rest from your resume/);
       await pn.click('button:has-text("and draft")');
-      await pn.waitForSelector('text=Check it, then press Apply yourself', { timeout: 20000 });
+      await pn.waitForSelector('text=press Apply yourself', { timeout: 20000 });
       const v = await ft.evaluate(() => ({ why: document.querySelector('[name="cards[3]"]').value, db: document.querySelector('[name="cards[4]"]').value, gender: document.querySelector('[name="eeo[gender]"]').value, files: document.querySelector('[name=resume]').files.length, clicked: !!window.__submitClicked }));
       assert.match(v.why, /Python and Django/); assert.equal(v.db, 'PostgreSQL');
       assert.equal(v.gender, '', 'sensitive questions are not drafted'); assert.deepEqual([v.files, v.clicked], [0, false]);
       assert.ok(seen.some((q) => /Why do you want/.test(q)) && !seen.some((q) => /gender|disabilit|veteran|race|privacy policy|Resume/i.test(q)), seen.join(' | '));
       const t = await text(pn);
-      assert.match(t, /Check these/); assert.match(t, /Drafted from your resume and this job/);
+      assert.match(t, /Check these/); assert.match(t, /Assumed from your resume and profile/);
       await shot(pn, 'panel-3-ai-drafts');
       await pn.locator('.fld', { hasText: 'Why do you want' }).locator('button:has-text("Looks right")').click();
       await pn.waitForSelector('text=Filled and saved');
@@ -198,11 +198,13 @@ try {
       const id = await probe.evaluate(async (u) => (await chrome.tabs.query({})).find((t) => t.url === u).id, url);
       await probe.evaluate((tabId) => chrome.storage.local.set({ autofillRequest: { tabId, at: Date.now() } }), id); // what the popup's button sets
       const pn = await ctx.newPage(); await pn.goto(`chrome-extension://${extId}/sidepanel.html?tab=${id}`);
-      await pn.waitForSelector('text=Check it, then press Apply yourself', { timeout: 25000 }).catch(async (e) => { throw new Error(`${e.message.split('\n')[0]}\nPANEL SAYS: ${(await text(pn)).slice(0, 600)}`); }); // nobody pressed Fill
+      await pn.waitForSelector('text=press Apply yourself', { timeout: 25000 }).catch(async (e) => { throw new Error(`${e.message.split('\n')[0]}\nPANEL SAYS: ${(await text(pn)).slice(0, 600)}`); }); // nobody pressed Fill
       const v = await ft.evaluate(() => ({ name: document.querySelector('[name=name]').value, why: document.querySelector('[name="cards[3]"]').value, gender: document.querySelector('[name="eeo[gender]"]').value, files: document.querySelector('[name=resume]').files.length, clicked: !!window.__submitClicked, submitted: !!window.__submitted }));
       assert.equal(v.name, 'RAHUL SHARMA'); assert.match(v.why, /Python and Django/); assert.deepEqual([v.gender, v.files, v.clicked, v.submitted], ['', 0, false, false]);
       const heads = await pn.locator('.group h2').allInnerTexts();
-      assert.match(heads[0], /^Needs you/); assert.ok(heads.findIndex((h) => /Check these/.test(h)) < heads.findIndex((h) => /^Filled from your profile/.test(h)), heads.join(' | '));
+      assert.match(heads[0], /^Needs you/);
+      assert.match(await pn.locator('details.group.green > summary').innerText(), /fields? filled from your profile/);
+      assert.equal(await pn.locator('.fld.green:visible').count(), 0, 'only what needs attention is on show; filled fields are folded away');
       assert.match(await text(pn), /need your attention/);
       await pn.setViewportSize({ width: 420, height: 900 }); await shot(pn, 'panel-4-one-click');
       // The user presses the site's Next; new fields appear and are filled without another click.
@@ -210,6 +212,31 @@ try {
       await ft.waitForFunction(() => document.querySelector('[name=late]').value === '18 LPA', null, { timeout: 15000 });
       assert.equal(await ft.evaluate(() => !!window.__submitClicked), false);
     } finally { setClientForTests(null); }
+  });
+
+  await step('a user with no saved job cannot fill: nothing is read, filled or drafted, and they are told to save the job', async () => {
+    const t2 = (await api('/api/auth/signup', { method: 'POST', body: { email: 'nojob@example.com', password: 'correct horse' } })).data.token;
+    const f2 = new FormData(); f2.append('file', new Blob([readFileSync(join(root, 'fixtures', 'sample-resume.txt'))]), 'resume.txt');
+    await api('/api/profile/resume', { method: 'POST', body: f2, token: t2 });
+    await probe.evaluate((t) => chrome.storage.local.set({ token: t }), t2);
+    try {
+      const url = `${SITE}/apply-lever.html?nojob`;
+      const ft = await ctx.newPage(); await ft.goto(url);
+      const id = await probe.evaluate(async (u) => (await chrome.tabs.query({})).find((t) => t.url === u).id, url);
+      await probe.evaluate((tabId) => chrome.storage.local.set({ autofillRequest: { tabId, at: Date.now() } }), id); // even a one-click request
+      const pn = await ctx.newPage(); await pn.goto(`chrome-extension://${extId}/sidepanel.html?tab=${id}`);
+      await pn.waitForSelector('text=Save this job in Rolemate first', { timeout: 15000 });
+      await pn.waitForTimeout(1500);
+      await pn.setViewportSize({ width: 420, height: 700 }); await shot(pn, 'panel-5-gate');
+      assert.equal(await ft.evaluate(() => document.querySelector('[name=email]').value), '', 'nothing was filled');
+      assert.equal(await ft.evaluate(() => document.querySelectorAll('[data-rolemate]').length), 0, 'nothing was marked on the page');
+      assert.equal(await pn.locator('button', { hasText: /^Fill / }).count(), 0, 'there is no Fill button');
+      const jobId = (await api('/api/jobs', { token })).data.jobs[0].id;
+      const q = [{ id: 'q', label: 'Why us?' }];
+      assert.equal((await api('/api/autofill/draft', { method: 'POST', token: t2, body: { questions: q } })).status, 400);
+      assert.equal((await api('/api/autofill/draft', { method: 'POST', token: t2, body: { jobId, questions: q } })).status, 404, 'cannot draft against someone else\'s job');
+      assert.equal((await api(`/api/autofill/jobs/${jobId}/data`, { token: t2 })).status, 404, 'cannot fetch fill data for someone else\'s job');
+    } finally { await probe.evaluate((t) => chrome.storage.local.set({ token: t }), token); }
   });
 
   await step('dashboard: Application details and Saved answers are editable', async () => {
