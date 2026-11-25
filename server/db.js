@@ -62,6 +62,19 @@ export function openDb(path = 'data/tailorkit.db') {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, month TEXT NOT NULL, job_key TEXT NOT NULL,
       PRIMARY KEY (user_id, month, job_key)
     );
+    -- Autofill: answers the user approved (reused across applications) and the questions forms asked.
+    CREATE TABLE IF NOT EXISTS qa_bank (
+      id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      question TEXT NOT NULL, qkey TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '', answer TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (user_id, qkey)
+    );
+    CREATE TABLE IF NOT EXISTS question_log (
+      id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL, label TEXT NOT NULL, kind TEXT NOT NULL DEFAULT '',
+      outcome TEXT NOT NULL DEFAULT '', host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS question_log_user ON question_log(user_id, created_at);
   `);
   // Added after the first release: a stable identity for "the same job" (see capture).
   if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'google_id')) db.exec("ALTER TABLE users ADD COLUMN google_id TEXT NOT NULL DEFAULT ''");
@@ -70,6 +83,9 @@ export function openDb(path = 'data/tailorkit.db') {
   }
   if (!db.prepare('PRAGMA table_info(jobs)').all().some((c) => c.name === 'logo')) db.exec("ALTER TABLE jobs ADD COLUMN logo TEXT NOT NULL DEFAULT ''");
   if (!db.prepare('PRAGMA table_info(resumes)').all().some((c) => c.name === 'downloaded_at')) db.exec('ALTER TABLE resumes ADD COLUMN downloaded_at TEXT');
+  // Autofill: details the resume doesn't hold (notice period aside), confirmed by the user; and the follow-up date set when a job is marked applied.
+  if (!db.prepare('PRAGMA table_info(profiles)').all().some((c) => c.name === 'apply_data')) db.exec("ALTER TABLE profiles ADD COLUMN apply_data TEXT NOT NULL DEFAULT '{}'");
+  if (!db.prepare('PRAGMA table_info(jobs)').all().some((c) => c.name === 'follow_up_due')) db.exec('ALTER TABLE jobs ADD COLUMN follow_up_due TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS jobs_key ON jobs(user_id, job_key)');
   return db;
 }

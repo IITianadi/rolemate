@@ -9,3 +9,4 @@ site/dist/
 .dev.vars
 .DS_Store
 rolemate-extension.zip
+extension-dev/

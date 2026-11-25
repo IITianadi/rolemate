@@ -1,4 +1,4 @@
-import { h, toast, clear } from './dom.js';
+import { h, toast, clear, fmtDate } from './dom.js';
 import { api } from './api.js';
 import { icon } from './icons.js';
 import { pageHead, emptyState, nextStep, logoMark, ago, exact, parseTs, creditNudge } from './ui.js';
@@ -39,8 +39,12 @@ export function requestAdd(go) {
 const label = (j) => [j.title, j.company].filter(Boolean).join(' at ');
 function suggestion(jobs, open) {
   const talk = jobs.find((j) => ['interview', 'screening', 'offer'].includes(j.status));
+  // An application sent a week ago with no news: nudge once, naming the day it came due.
+  const today = new Date().toISOString().slice(0, 10);
+  const due = jobs.filter((j) => j.status === 'applied' && j.followUpDue && j.followUpDue.slice(0, 10) <= today).sort((a, b) => a.followUpDue.localeCompare(b.followUpDue))[0];
   const best = jobs.filter((j) => j.status === 'saved').sort((a, b) => (b.match?.score ?? -1) - (a.match?.score ?? -1))[0];
   if (talk) return { id: talk.id, node: nextStep({ label: 'Next', title: `Prepare for ${label(talk)}`, sub: 'Likely questions, with answers drawn from your resume.', actions: [h('a', { class: 'btn', href: `#/job/${talk.id}` }, 'Open prep')] }) };
+  if (due) return { id: due.id, node: nextStep({ label: 'Follow up', title: `Follow up on ${label(due)}`, sub: `You applied ${fmtDate(due.appliedAt)}. A short note to the recruiter keeps you in mind.`, actions: [h('a', { class: 'btn', href: `#/job/${due.id}` }, 'Open job')] }) };
   if (best) {
     const sc = best.match?.score, ready = sc != null && sc >= 75, miss = (best.match?.missingMust || []).slice(0, 3).join(', ');
     return { id: best.id, node: nextStep({ label: 'Next', title: `${ready ? 'Apply to' : 'Tailor your resume for'} ${label(best)}`,

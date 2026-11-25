@@ -1,0 +1,22 @@
+/* Side panel: same Dense Module Mosaic tokens as the popup (popup.css), sized to a resizable panel. */
+body { width: auto; min-width: 300px; }
+main { padding: 18px 16px 24px; }
+.mod .tab { margin-left: -17px; }
+.row { display: flex; gap: 8px; align-items: center; } .row.between { justify-content: space-between; } .row .btn { margin-top: 0; }
+.btn.small { min-height: 34px; padding: 0 12px; font-size: 14px; width: auto; display: inline-block; margin-top: 8px; }
+.sumbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.pill { font-size: 14px; font-weight: 900; padding: 2px 10px; border: 1px solid var(--line-strong); }
+.pill.green { color: #fff; background: #1a7f37; border-color: #1a7f37; } .pill.yellow { color: #3b2a00; background: #f6d56b; border-color: #f6d56b; } .pill.red { color: #fff; background: var(--red); border-color: var(--red); } .pill.attach { color: #fff; background: var(--ink); border-color: var(--ink); }
+.group h2 { font-size: 15px; font-weight: 900; margin: 16px 0 6px; display: flex; align-items: center; gap: 8px; }
+.group h2 i { display: inline-block; width: 12px; height: 12px; } .group.green h2 i { background: #1a7f37; } .group.yellow h2 i { background: #f6d56b; border: 1px solid #b7791f; } .group.red h2 i { background: var(--red); } .group.attach h2 i { background: var(--ink); }
+.fld { border: 1px solid var(--line); border-left-width: 4px; padding: 8px 10px; margin-bottom: 6px; }
+.fld.green { border-left-color: #1a7f37; } .fld.yellow { border-left-color: #b7791f; } .fld.red { border-left-color: var(--red); } .fld.attach { border-left-color: var(--ink); } .fld.kept { border-left-color: var(--line-strong); }
+.fld .q { font-weight: 700; font-size: 14.5px; line-height: 1.35; overflow-wrap: anywhere; } .fld .q button { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.fld .v { font-size: 14.5px; color: var(--ink2); margin-top: 2px; overflow-wrap: anywhere; white-space: pre-wrap; } .fld .why { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.fld .opt { font-size: 12.5px; font-weight: 700; color: var(--muted); margin-left: 6px; }
+.fld textarea, .fld select, .fld input { width: 100%; margin-top: 6px; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 0; font: inherit; font-weight: 500; background: #fff; color: var(--ink); }
+.fld textarea { min-height: 96px; resize: vertical; }
+.note { border-left: 3px solid var(--ink); background: var(--sunken); padding: 8px 12px; margin: 10px 0; font-size: 14.5px; }
+.note.warn { border-left-color: var(--red); background: var(--red-bg); color: var(--red-ink); }
+.picker { display: grid; gap: 6px; margin-top: 8px; } .picker button { text-align: left; border: 1px solid var(--line-strong); background: #fff; padding: 8px 10px; cursor: pointer; font: inherit; } .picker button:hover { border-color: var(--ink); background: var(--sunken); } .picker b { display: block; font-weight: 900; font-size: 14.5px; } .picker span { font-size: 13.5px; color: var(--muted); }
+.never { font-size: 13.5px; color: var(--muted); margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }

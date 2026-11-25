@@ -90,7 +90,7 @@ function extractPage() {
 
   // A stable id for "this exact posting" so two different jobs on the same page address are never confused.
   const q2 = new URLSearchParams(location.search);
-  out.externalId = q2.get('currentJobId') || q2.get('jobId') || q2.get('job_id') || q2.get('gh_jid') || q2.get('jid') || q2.get('reqId')
+  out.externalId = q2.get('currentJobId') || q2.get('jobId') || q2.get('job_id') || q2.get('gh_jid') || q2.get('jid') || q2.get('reqId') || (q2.get('job_listing_slug') || q2.get('job_listing_id') || '').match(/^\d{5,}/)?.[0]
     || (location.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d{6,})/) || [])[1] || (location.pathname.match(/-(\d{6,})\/?$/) || [])[1] || '';
 
   // The job description container (class names used by LinkedIn, Naukri and common job pages). Used on any site.
@@ -225,6 +225,23 @@ async function savedJobFor(url) {
   } catch { return null; }
 }
 
+// Is there an application form in this tab? Only asked when the user opens Rolemate on it (activeTab). Read-only.
+async function formOnPage(tab) {
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['content/autofill.js'] });
+    const runs = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func: () => window.__rolemateAF?.detect() });
+    return runs.some((r) => r.result?.isForm);
+  } catch { return false; }
+}
+// Opens the side panel, where the form is read and filled. Must be called straight from the click.
+const fillModule = (tab, site) => el('section', { class: 'ready mod' },
+  el('span', { class: 'tab' }, 'Application form'),
+  el('h1', {}, 'Fill it with your Rolemate details'),
+  el('p', {}, 'Rolemate types in your details and the answers you’ve saved. You attach your tailored resume and press Apply yourself.'),
+  el('button', { class: 'btn primary', onclick: () => { chrome.sidePanel.open({ tabId: tab.id }).then(() => window.close(), () => {}); } }, 'Fill the form'),
+  site && el('button', { class: 'link', onclick: () => capture(tab, site) }, 'Capture this job instead'),
+  el('p', { class: 'hint' }, 'It never uploads files and never presses Apply.'));
+
 async function home() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const f = await footer();
@@ -232,6 +249,7 @@ async function home() {
     return show(message('info', 'Open a job post first', 'Go to LinkedIn, Naukri or another job site, open a job, then click Rolemate.'), sitesList(), f);
   }
   const site = findSite(tab.url);
+  if (await formOnPage(tab)) return show(fillModule(tab, site), f);
   if (!site) {
     return show(message('stop', 'This site isn’t supported yet', `Rolemate captures jobs from ${SITES.length} job sites and career pages, like LinkedIn, Naukri and Indeed.`,
       el('button', { class: 'btn', onclick: () => openTab('/#/tracking/add') }, 'Paste the job in Rolemate instead')), sitesList(), f);

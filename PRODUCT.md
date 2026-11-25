@@ -24,9 +24,10 @@ The whole job pipeline in one place: capture, match score, tailored resume, appl
 
 ## Capabilities and Constraints
 - Rolemate never applies for the user; they press apply themselves.
+- Autofill (extension side panel): on an application form the user opens, Rolemate fills the details from their profile and saved answers, and marks each question green (filled), yellow (check) or red (needs the user). It never uploads a file (the user attaches the tailored resume it names), never clicks Apply/Submit/Next, never solves a captcha or reads a code, and always asks sensitive questions (gender, disability, veteran status, race) unless the user opted in. Drafts for free-text questions are filled only after the user approves them. Call it "fill the form" or "autofill", never "auto-apply".
 - Tailoring keeps the user's own layout and never adds a skill the user has not confirmed ("I have this"). Rewording suggestions keep the same facts and numbers.
 - The extension captures only on supported job sites and single job posts; elsewhere the user pastes the description in the dashboard.
-- Not yet true, do not claim: extension on the Chrome Web Store, auto-apply, a score that rises after tailoring alone.
+- Not yet true, do not claim: extension on the Chrome Web Store, auto-apply (applying or submitting for the user), a score that rises after tailoring alone.
 - Existing frontend: vanilla JS modules in `web/`, no build step; user text is never put in innerHTML.
 
 ## Brand Commitments

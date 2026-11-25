@@ -4,7 +4,7 @@ A Chrome extension plus a dashboard (same login) that helps a candidate apply wi
 
 **Flow:** upload your resume once (that's the only onboarding step; the profile is read from it) → open a job page or LinkedIn hiring post → click the extension → see a match score and what's missing → download a tailored PDF → track the application → get an AI interview brief with company research → chat with an assistant that knows the job.
 
-It never submits an application. The candidate reviews and applies themselves.
+It never submits an application. The extension can fill in the details on an application form from the candidate's profile (side panel, green/yellow/red review), but it never uploads a file or presses Apply: the candidate attaches the tailored resume, reviews and applies themselves.
 
 ## Run it
 

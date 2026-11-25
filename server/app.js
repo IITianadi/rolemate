@@ -22,6 +22,7 @@ import { findCompanyLogo } from './lib/logo.js';
 import { createMailer } from './lib/mail.js';
 import { welcomeEmail, guideEmail, resetEmail } from './lib/mail-templates.js';
 import { verifyGoogleToken } from './lib/google.js';
+import { buildApplyProfile, missingDetails, sanitizeApply, sanitizeAnswer, qkey, draftAnswers } from './lib/autofill.js';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -97,7 +98,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   const getProfile = (userId) => {
     const r = db.prepare('SELECT * FROM profiles WHERE user_id = ?').get(userId);
     if (!r) return null;
-    return { resume: j(r.resume, null), originalText: r.original_text, format: r.source_format, facts: j(r.facts, {}), confirmedSkills: j(r.confirmed_skills, []) };
+    return { resume: j(r.resume, null), originalText: r.original_text, format: r.source_format, facts: j(r.facts, {}), confirmedSkills: j(r.confirmed_skills, []), apply: j(r.apply_data, {}) };
   };
   const needProfile = (userId) => {
     const p = getProfile(userId);
@@ -121,7 +122,7 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
   const jobOut = (r) => {
     const resumes = db.prepare('SELECT id, label, changes, created_at, updated_at, downloaded_at FROM resumes WHERE job_id = ? ORDER BY id DESC').all(r.id)
       .map(({ changes, downloaded_at: dl, ...x }) => ({ ...x, changes: j(changes, []), downloaded: !!dl }));
-    return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, logo: r.logo || '', status: r.status, notes: r.notes,
+    return { id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, source: r.source, logo: r.logo || '', status: r.status, notes: r.notes, followUpDue: r.follow_up_due || null,
       credit: (db.prepare('SELECT plan FROM users WHERE id = ?').get(r.user_id)?.plan !== 'free') || !!db.prepare('SELECT 1 FROM usage WHERE user_id = ? AND job_key = ?').get(r.user_id, `job:${r.id}`),
       requirements: j(r.requirements, {}), match: j(r.match, {}), resumes, createdAt: r.created_at, updatedAt: r.updated_at, appliedAt: r.applied_at };
   };
@@ -453,8 +454,10 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     const status = b.status === undefined ? r.status : b.status;
     if (!STATUSES.includes(status)) throw httpError(400, 'Unknown status.');
     const appliedAt = status !== 'saved' && !r.applied_at ? new Date().toISOString() : r.applied_at;
-    db.prepare("UPDATE jobs SET status=?, notes=?, title=?, company=?, location=?, applied_at=?, updated_at=datetime('now') WHERE id=?")
-      .run(status, b.notes === undefined ? r.notes : String(b.notes).slice(0, 4000), b.title === undefined ? r.title : String(b.title).slice(0, 200), b.company === undefined ? r.company : String(b.company).slice(0, 120), b.location === undefined ? r.location : String(b.location).slice(0, 120), appliedAt, r.id);
+    // Marking a job applied sets a follow-up 7 days out (only the first time; later stage moves keep it).
+    const followUp = r.follow_up_due || (status === 'applied' && !r.applied_at ? new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10) : null);
+    db.prepare("UPDATE jobs SET status=?, notes=?, title=?, company=?, location=?, applied_at=?, follow_up_due=?, updated_at=datetime('now') WHERE id=?")
+      .run(status, b.notes === undefined ? r.notes : String(b.notes).slice(0, 4000), b.title === undefined ? r.title : String(b.title).slice(0, 200), b.company === undefined ? r.company : String(b.company).slice(0, 120), b.location === undefined ? r.location : String(b.location).slice(0, 120), appliedAt, followUp, r.id);
     res.json({ job: jobOut(jobRow(req.user.id, r.id)) });
   });
 
@@ -636,12 +639,107 @@ export function createApp({ dbPath = process.env.DB_PATH || 'data/tailorkit.db',
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${name}.pdf"` }).send(Buffer.from(pdf));
   });
 
+  // ---------- autofill (used by the extension's side panel and the dashboard's "Application details")
+  // Rolemate fills the details on an application form from the user's profile. It never submits and never uploads a file:
+  // the user attaches the tailored resume themselves and presses apply.
+  const draftLimit = rateLimiter({ max: 20 });
+  const bankRows = (userId) => db.prepare('SELECT id, question, tags, answer, updated_at FROM qa_bank WHERE user_id = ? ORDER BY updated_at DESC LIMIT 300').all(userId)
+    .map((r) => ({ id: r.id, question: r.question, tags: r.tags, answer: r.answer, updatedAt: r.updated_at }));
+  const applyProfileFor = (user) => {
+    const p = getProfile(user.id);
+    return { p, profile: buildApplyProfile({ resume: p?.resume, facts: p?.facts || {}, apply: p?.apply || {}, accountEmail: user.email, confirmedSkills: p?.confirmedSkills || [] }) };
+  };
+
+  // Everything the side panel needs for the form in the active tab. `candidates` are the user's open (not yet applied) jobs,
+  // newest first, because the form is usually on a different site from the page the job was captured on.
+  app.get('/api/autofill/context', auth, (req, res) => {
+    const { p, profile } = applyProfileFor(req.user);
+    const rows = db.prepare("SELECT * FROM jobs WHERE user_id = ? AND status IN ('saved','applied') ORDER BY (status = 'saved') DESC, id DESC LIMIT 25").all(req.user.id);
+    const pageUrl = canonicalUrl(String(req.query.url || ''));
+    const jobs = rows.map((r) => {
+      const latest = db.prepare('SELECT id, label, downloaded_at FROM resumes WHERE job_id = ? ORDER BY id DESC LIMIT 1').get(r.id);
+      return { id: r.id, title: r.title, company: r.company, location: r.location, status: r.status, url: r.url, logo: r.logo || '', fit: j(r.match, {}).score ?? null,
+        sameUrl: !!pageUrl && canonicalUrl(r.url) === pageUrl, resume: latest ? { id: latest.id, label: latest.label, downloaded: !!latest.downloaded_at } : null };
+    });
+    res.json({ hasResume: !!p, profile, missing: missingDetails(profile), bank: bankRows(req.user.id), jobs, aiEnabled: aiEnabled() });
+  });
+
+  app.get('/api/autofill/profile', auth, (req, res) => {
+    const { p, profile } = applyProfileFor(req.user);
+    res.json({ hasResume: !!p, apply: sanitizeApply(p?.apply || {}), facts: p?.facts || {}, profile, missing: missingDetails(profile) });
+  });
+
+  // Details the user confirms for forms. Notice period, CTC and relocation live in `facts` (already used by tailoring).
+  app.put('/api/autofill/profile', auth, (req, res) => {
+    const p = needProfile(req.user.id);
+    const apply = sanitizeApply(req.body?.apply || {});
+    const f = req.body?.facts || {};
+    const facts = { ...p.facts };
+    for (const k of ['noticePeriod', 'currentCtc', 'expectedCtc', 'relocation']) if (f[k] !== undefined) { const v = String(f[k] ?? '').trim().slice(0, 120); if (v) facts[k] = v; else delete facts[k]; }
+    db.prepare("UPDATE profiles SET apply_data = ?, facts = ?, updated_at = datetime('now') WHERE user_id = ?").run(JSON.stringify(apply), JSON.stringify(facts), req.user.id);
+    res.json({ ok: true, ...(({ profile }) => ({ profile, missing: missingDetails(profile) }))(applyProfileFor(req.user)) });
+  });
+
+  app.get('/api/autofill/answers', auth, (req, res) => res.json({ answers: bankRows(req.user.id) }));
+
+  // Save an approved answer. The same question (ignoring case and punctuation) is updated, never duplicated.
+  app.post('/api/autofill/answers', auth, (req, res) => {
+    const a = sanitizeAnswer(req.body);
+    if (!a.question || !a.answer) throw httpError(400, 'A question and an answer are both needed.');
+    const n = db.prepare('SELECT COUNT(*) c FROM qa_bank WHERE user_id = ?').get(req.user.id).c;
+    const exists = db.prepare('SELECT id FROM qa_bank WHERE user_id = ? AND qkey = ?').get(req.user.id, qkey(a.question));
+    if (!exists && n >= 300) throw httpError(409, 'You have 300 saved answers. Delete some in your dashboard first.');
+    db.prepare(`INSERT INTO qa_bank (user_id, question, qkey, tags, answer) VALUES (?,?,?,?,?)
+      ON CONFLICT(user_id, qkey) DO UPDATE SET answer = excluded.answer, tags = excluded.tags, question = excluded.question, updated_at = datetime('now')`)
+      .run(req.user.id, a.question, qkey(a.question), a.tags, a.answer);
+    res.status(exists ? 200 : 201).json({ answers: bankRows(req.user.id) });
+  });
+
+  app.put('/api/autofill/answers/:id', auth, (req, res) => {
+    const a = sanitizeAnswer(req.body);
+    const row = db.prepare('SELECT id FROM qa_bank WHERE id = ? AND user_id = ?').get(Number(req.params.id), req.user.id);
+    if (!row) throw httpError(404, 'Answer not found.');
+    if (!a.question || !a.answer) throw httpError(400, 'A question and an answer are both needed.');
+    const clash = db.prepare('SELECT id FROM qa_bank WHERE user_id = ? AND qkey = ? AND id <> ?').get(req.user.id, qkey(a.question), row.id);
+    if (clash) throw httpError(409, 'You already have an answer for that question.');
+    db.prepare("UPDATE qa_bank SET question = ?, qkey = ?, tags = ?, answer = ?, updated_at = datetime('now') WHERE id = ?").run(a.question, qkey(a.question), a.tags, a.answer, row.id);
+    res.json({ answers: bankRows(req.user.id) });
+  });
+
+  app.delete('/api/autofill/answers/:id', auth, (req, res) => {
+    db.prepare('DELETE FROM qa_bank WHERE id = ? AND user_id = ?').run(Number(req.params.id), req.user.id);
+    res.json({ answers: bankRows(req.user.id) });
+  });
+
+  // Drafts for free-text questions with no saved answer. Nothing is filled until the user approves it in the panel.
+  app.post('/api/autofill/draft', auth, draftLimit, async (req, res) => {
+    const qs = (Array.isArray(req.body?.questions) ? req.body.questions : []).slice(0, 12)
+      .map((q, i) => ({ id: String(q?.id ?? i).slice(0, 40), label: String(q?.label || '').slice(0, 400), options: (Array.isArray(q?.options) ? q.options : []).slice(0, 40).map((o) => String(o).slice(0, 120)), maxLength: Math.min(Number(q?.maxLength) || 0, 4000) || 0 }))
+      .filter((q) => q.label);
+    if (!qs.length) return res.json({ drafts: [] });
+    const { p, profile } = applyProfileFor(req.user);
+    const job = req.body?.jobId ? jobRow(req.user.id, req.body.jobId) : null;
+    const page = { title: String(req.body?.page?.title || '').slice(0, 200), company: String(req.body?.page?.company || '').slice(0, 120) };
+    res.json({ drafts: await draftAnswers({ questions: qs, resume: p?.resume, profile, bank: bankRows(req.user.id), job, page }) });
+  });
+
+  // Questions a form asked and what happened to each (filled, drafted, asked, skipped). Labels only, never the answers.
+  app.post('/api/autofill/log', auth, (req, res) => {
+    const rows = (Array.isArray(req.body?.questions) ? req.body.questions : []).slice(0, 100);
+    const jobId = req.body?.jobId ? jobRow(req.user.id, req.body.jobId).id : null;
+    const host = String(req.body?.host || '').slice(0, 100);
+    const ins = db.prepare('INSERT INTO question_log (user_id, job_id, label, kind, outcome, host) VALUES (?,?,?,?,?,?)');
+    for (const q of rows) { const label = String(q?.label || '').trim().slice(0, 300); if (label) ins.run(req.user.id, jobId, label, String(q?.kind || '').slice(0, 20), String(q?.outcome || '').slice(0, 20), host); }
+    res.json({ ok: true });
+  });
+
   // ---------- account
   app.get('/api/export', auth, (req, res) => {
     const id = req.user.id;
     res.set('Content-Disposition', 'attachment; filename="tailorkit-export.json"').json({
       user: { email: req.user.email, plan: req.user.plan }, profile: getProfile(id),
       jobs: db.prepare('SELECT * FROM jobs WHERE user_id = ?').all(id), resumes: db.prepare('SELECT * FROM resumes WHERE user_id = ?').all(id),
+      savedAnswers: db.prepare('SELECT question, tags, answer, created_at FROM qa_bank WHERE user_id = ?').all(id), questionLog: db.prepare('SELECT label, kind, outcome, host, created_at FROM question_log WHERE user_id = ?').all(id),
     });
   });
 

@@ -3,6 +3,7 @@ import { api, apiText } from './api.js';
 import { icon } from './icons.js';
 import { resumeEditor } from './editor.js';
 import { pageHead, stepper, nextStep } from './ui.js';
+import { applicationDetailsCard, savedAnswersCard } from './views-autofill.js';
 
 export const EXT_STEPS = () => h('ol', { class: 'steps' },
   h('li', null, h('div', null, 'Open ', h('code', null, 'chrome://extensions'), ' and switch on ', h('strong', null, 'Developer mode'), '.')),
@@ -112,11 +113,13 @@ export async function profileView(me, go) {
     profile.warnings.length > 0 && h('div', { class: 'notice' }, profile.warnings.join(' ')),
     profileSummary(profile.derived),
     h('div', { class: 'card' }, h('h2', null, 'Skills you’ve confirmed'), chips, h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn sm', onclick: save }, 'Save changes'))),
-    h('details', { class: 'card' }, h('summary', { class: 'row between' }, h('strong', null, 'Optional details'), h('span', { class: 'muted small' }, 'Used in interview prep')),
+    h('details', { class: 'card' }, h('summary', { class: 'row between' }, h('strong', null, 'Optional details'), h('span', { class: 'muted small' }, 'Used in interview prep and to fill forms')),
       h('div', { class: 'grid3' }, field('noticePeriod', 'Notice period', 'e.g. 30 days'), field('currentCtc', 'Current CTC', 'e.g. 12 LPA'), field('expectedCtc', 'Expected CTC', 'e.g. 16 LPA'),
         field('location', 'Location', profile.derived.location || ''), field('relocation', 'Open to relocate?', ''), field('yearsExperience', 'Years of experience', profile.derived.yearsExperience ? `Detected ${profile.derived.yearsExperience}` : '', 'number')),
       h('div', { style: 'margin-top:12px' }, h('button', { class: 'btn primary sm', onclick: save }, 'Save'))),
   );
+  // What the extension fills into application forms. A failure here must not break the rest of the profile page.
+  try { host.append(await applicationDetailsCard(), await savedAnswersCard()); } catch (e) { host.append(h('div', { class: 'notice' }, e.message)); }
   return host;
 }
 

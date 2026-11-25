@@ -1,0 +1,18 @@
+<!doctype html><html><head><title>Senior Backend Engineer @ Acme</title></head><body>
+<!-- Approximation of an Ashby application page (jobs.ashbyhq.com): .ashby-application-form-field-entry, Yes/No as buttons. -->
+<h1>Senior Backend Engineer</h1>
+<form onsubmit="window.__submitted=true;return false">
+ <div class="ashby-application-form-field-entry"><label for="_systemfield_name">Name</label><input id="_systemfield_name" type="text" required></div>
+ <div class="ashby-application-form-field-entry"><label for="_systemfield_email">Email</label><input id="_systemfield_email" type="email" required></div>
+ <div class="ashby-application-form-field-entry"><label for="_systemfield_resume">Resume</label><input id="_systemfield_resume" type="file"></div>
+ <div class="ashby-application-form-field-entry"><label for="loc">Current location</label><input id="loc" type="text"></div>
+ <div class="ashby-application-form-field-entry"><label>Will you now or in the future require visa sponsorship?</label><div><button type="button" id="yes1">Yes</button><button type="button" id="no1">No</button></div></div>
+ <div class="ashby-application-form-field-entry"><label for="q3">Expected CTC (INR)</label><input id="q3" type="text"></div>
+ <div class="ashby-application-form-field-entry"><fieldset><legend>Do you have a disability?</legend>
+   <label><input type="radio" name="dis" value="y"> Yes, I have a disability</label><label><input type="radio" name="dis" value="n"> No, I do not</label><label><input type="radio" name="dis" value="x"> I do not want to answer</label></fieldset></div>
+ <div class="ashby-application-form-field-entry"><label for="q5">Describe a challenging project you worked on.</label><textarea id="q5"></textarea></div>
+ <label><input type="checkbox" id="agree"> I agree to the privacy policy</label>
+ <button type="submit" id="submit-btn" onclick="window.__submitClicked=true">Submit Application</button>
+</form>
+<script>document.querySelectorAll('#yes1,#no1').forEach(b=>b.addEventListener('click',()=>{window.__yn=b.textContent}))</script>
+</body></html>
